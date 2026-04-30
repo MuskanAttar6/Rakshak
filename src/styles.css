@@ -130,6 +130,7 @@
 
 html, body, #root {
   height: 100%;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -1853,7 +1854,8 @@ button {
 
 .dashboard-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: var(--dashboard-bg);
   color: var(--text);
 }
@@ -2011,9 +2013,13 @@ button {
   margin-left: 260px;
   padding: 24px 32px;
   max-width: calc(100vw - 260px);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-/* Header */
+/* Header — fixed height, never shrinks */
 .main-header {
   display: flex;
   justify-content: space-between;
@@ -2021,6 +2027,7 @@ button {
   margin-bottom: 28px;
   padding-bottom: 20px;
   border-bottom: 1px solid var(--sidebar-section-border);
+  flex-shrink: 0;
 }
 
 .header-title {
@@ -2105,9 +2112,29 @@ button {
 
 /* Dashboard Content */
 .dashboard-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 24px;
+  padding-bottom: 32px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(88,166,255,0.2) transparent;
+}
+
+.dashboard-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.dashboard-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dashboard-content::-webkit-scrollbar-thumb {
+  background: rgba(88,166,255,0.2);
+  border-radius: 100px;
 }
 
 /* Stats Grid */
@@ -2693,6 +2720,94 @@ button {
 }
 
 /* Issues Section */
+/* Health Reports page */
+.report-score-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 3px solid;
+  flex-shrink: 0;
+}
+
+.report-score-num {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.report-score-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+}
+
+.report-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 16px;
+}
+
+.report-summary-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.report-summary-info h3 {
+  margin: 0 0 3px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.report-summary-info p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.report-summary-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.report-divider {
+  height: 1px;
+  background: var(--card-border);
+  margin-bottom: 18px;
+}
+
+.issues-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.issues-section-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.issues-section-header .search-bar {
+  margin-bottom: 0;
+}
+
 .issues-section {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
@@ -3594,6 +3709,7 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100vh;
   max-width: calc(100vw - 260px);
 }
 

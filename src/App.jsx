@@ -11,6 +11,7 @@ import DiskSpaceAnalyzer from './components/DiskSpaceAnalyzer.jsx';
 import AboutPage from './components/AboutPage.jsx';
 import AntivirusPage from './components/AntivirusPage.jsx';
 import UnusedAppsPage from './components/UnusedAppsPage.jsx';
+import ScoreRing from './components/ScoreRing.jsx';
 
 // Dashboard Icons (SVG components)
 const Icons = {
@@ -488,6 +489,16 @@ export default function App() {
                 ? <><h2>Antivirus Scan</h2><p>ClamAV-powered malware detection — scan files, folders, or your entire drive</p></>
                 : activeTab === 'unused-apps'
                 ? <><h2>Unused Apps</h2><p>Discover installed apps you haven&apos;t launched in a while and reclaim disk space</p></>
+                : activeTab === 'reports'
+                ? <><h2>Health Reports</h2><p>Full system scan results with export options — JSON or plain text</p></>
+                : activeTab === 'network'
+                ? <><h2>Network</h2><p>Internet connectivity, firewall, DNS and location checks</p></>
+                : activeTab === 'processes'
+                ? <><h2>Processes</h2><p>Running services, startup apps and background process health</p></>
+                : activeTab === 'storage'
+                ? <><h2>Storage</h2><p>Disk usage, health and file system checks</p></>
+                : activeTab === 'performance'
+                ? <><h2>Performance</h2><p>CPU, memory and system load metrics</p></>
                 : <><h2>System Health Overview</h2><p>Real-time monitoring and intelligent alerts for a healthy system</p></>}
             </div>
           </div>
@@ -513,7 +524,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* Disk Analyzer View */}
+        {/* Disk Analyzer View — fills remaining height, no padding */}
         {activeTab === 'disk' && (
           <div className="disk-panel-wrap">
             <DiskSpaceAnalyzer />
@@ -541,8 +552,210 @@ export default function App() {
           </div>
         )}
 
-        {/* Dashboard Content */}
-        {activeTab !== 'disk' && activeTab !== 'about' && activeTab !== 'antivirus' && activeTab !== 'unused-apps' && <div className="dashboard-content">
+        {/* Performance View */}
+        {activeTab === 'performance' && (
+          <div className="dashboard-content">
+            {!report ? (
+              <div className="no-results" style={{ textAlign: 'center', padding: '3rem', opacity: 0.6 }}>
+                No report yet. Click <strong>Scan Now</strong> to generate a health report.
+              </div>
+            ) : (
+              <div className="issues-section">
+                <div className="section-header">
+                  <div className="section-title-with-stats">
+                    <h3>Performance Details</h3>
+                    <div className="category-stats">
+                      <span className="stat-pill ok">{categoryStats.ok} OK</span>
+                      <span className="stat-pill warning">{categoryStats.warning} Warning</span>
+                      <span className="stat-pill critical">{categoryStats.critical} Critical</span>
+                    </div>
+                  </div>
+                  <SearchBar
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    resultCount={filteredResults.length}
+                    totalCount={categoryStats.total}
+                  />
+                </div>
+                {filteredResults.length === 0 ? (
+                  <div className="no-results">
+                    {searchQuery ? 'No matching results found.' : 'No performance checks found.'}
+                  </div>
+                ) : (
+                  <IssueList results={filteredResults} isFiltered={!!searchQuery} />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Storage View */}
+        {activeTab === 'storage' && (
+          <div className="dashboard-content">
+            {!report ? (
+              <div className="no-results" style={{ textAlign: 'center', padding: '3rem', opacity: 0.6 }}>
+                No report yet. Click <strong>Scan Now</strong> to generate a health report.
+              </div>
+            ) : (
+              <div className="issues-section">
+                <div className="section-header">
+                  <div className="section-title-with-stats">
+                    <h3>Storage Details</h3>
+                    <div className="category-stats">
+                      <span className="stat-pill ok">{categoryStats.ok} OK</span>
+                      <span className="stat-pill warning">{categoryStats.warning} Warning</span>
+                      <span className="stat-pill critical">{categoryStats.critical} Critical</span>
+                    </div>
+                  </div>
+                  <SearchBar
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    resultCount={filteredResults.length}
+                    totalCount={categoryStats.total}
+                  />
+                </div>
+                {filteredResults.length === 0 ? (
+                  <div className="no-results">
+                    {searchQuery ? 'No matching results found.' : 'No storage checks found.'}
+                  </div>
+                ) : (
+                  <IssueList results={filteredResults} isFiltered={!!searchQuery} />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Processes View */}
+        {activeTab === 'processes' && (
+          <div className="dashboard-content">
+            {!report ? (
+              <div className="no-results" style={{ textAlign: 'center', padding: '3rem', opacity: 0.6 }}>
+                No report yet. Click <strong>Scan Now</strong> to generate a health report.
+              </div>
+            ) : (
+              <div className="issues-section">
+                <div className="section-header">
+                  <div className="section-title-with-stats">
+                    <h3>Process Details</h3>
+                    <div className="category-stats">
+                      <span className="stat-pill ok">{categoryStats.ok} OK</span>
+                      <span className="stat-pill warning">{categoryStats.warning} Warning</span>
+                      <span className="stat-pill critical">{categoryStats.critical} Critical</span>
+                    </div>
+                  </div>
+                  <SearchBar
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    resultCount={filteredResults.length}
+                    totalCount={categoryStats.total}
+                  />
+                </div>
+                {filteredResults.length === 0 ? (
+                  <div className="no-results">
+                    {searchQuery ? 'No matching results found.' : 'No process checks found.'}
+                  </div>
+                ) : (
+                  <IssueList results={filteredResults} isFiltered={!!searchQuery} />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Network View */}
+        {activeTab === 'network' && (
+          <div className="dashboard-content">
+            {!report ? (
+              <div className="no-results" style={{ textAlign: 'center', padding: '3rem', opacity: 0.6 }}>
+                No report yet. Click <strong>Scan Now</strong> to generate a health report.
+              </div>
+            ) : (
+              <div className="issues-section">
+                <div className="section-header">
+                  <div className="section-title-with-stats">
+                    <h3>Network Details</h3>
+                    <div className="category-stats">
+                      <span className="stat-pill ok">{categoryStats.ok} OK</span>
+                      <span className="stat-pill warning">{categoryStats.warning} Warning</span>
+                      <span className="stat-pill critical">{categoryStats.critical} Critical</span>
+                    </div>
+                  </div>
+                  <SearchBar
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    resultCount={filteredResults.length}
+                    totalCount={categoryStats.total}
+                  />
+                </div>
+                {filteredResults.length === 0 ? (
+                  <div className="no-results">
+                    {searchQuery ? 'No matching results found.' : 'No network checks found.'}
+                  </div>
+                ) : (
+                  <IssueList results={filteredResults} isFiltered={!!searchQuery} />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Health Reports View */}
+        {activeTab === 'reports' && (
+          <div className="dashboard-content">
+            {!report ? (
+              <div className="no-results" style={{ textAlign: 'center', padding: '3rem', opacity: 0.6 }}>
+                No report yet. Click <strong>Scan Now</strong> to generate a health report.
+              </div>
+            ) : (
+              <div className="issues-section">
+                <div className="report-summary-bar">
+                  <div className="report-summary-left">
+                    <div className="report-score-badge" style={{
+                      background: report.score >= 75 ? 'rgba(63,185,80,0.15)' : report.score >= 60 ? 'rgba(210,153,34,0.15)' : 'rgba(248,81,73,0.15)',
+                      borderColor: report.score >= 75 ? '#3fb950' : report.score >= 60 ? '#d29922' : '#f85149',
+                      color: report.score >= 75 ? '#3fb950' : report.score >= 60 ? '#d29922' : '#f85149',
+                    }}>
+                      <span className="report-score-num">{report.score}</span>
+                      <span className="report-score-label">{report.score >= 75 ? 'Good' : report.score >= 60 ? 'Fair' : 'Poor'}</span>
+                    </div>
+                    <div className="report-summary-info">
+                      <h3>System Health Report</h3>
+                      <p>Generated {new Date(report.timestamp).toLocaleString()} &middot; {report.platform}</p>
+                    </div>
+                  </div>
+                  <div className="report-summary-right">
+                    <div className="category-stats">
+                      <span className="stat-pill ok">{report.okCount} OK</span>
+                      <span className="stat-pill warning">{report.warningCount} Warning</span>
+                      <span className="stat-pill critical">{report.criticalCount} Critical</span>
+                    </div>
+                    <ExportButton report={report} />
+                  </div>
+                </div>
+                <div className="report-divider" />
+                <div className="issues-section-header">
+                  <h3>All Checks ({report.results.length})</h3>
+                  <SearchBar
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    resultCount={filteredResults.length}
+                    totalCount={report.results.length}
+                  />
+                </div>
+                {filteredResults.length === 0 ? (
+                  <div className="no-results">No matching results found.</div>
+                ) : (
+                  <IssueList results={filteredResults} isFiltered={!!searchQuery} />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* All other tabs — single scrollable pane */}
+        {activeTab !== 'disk' && activeTab !== 'about' && activeTab !== 'antivirus' && activeTab !== 'unused-apps' && activeTab !== 'reports' && activeTab !== 'network' && activeTab !== 'processes' && activeTab !== 'storage' && activeTab !== 'performance' && (
+          <div className="dashboard-content">
           {loading && scanProgress.current && (
             <div className="scan-progress-bar">
               <div className="scan-progress-info">
@@ -732,7 +945,8 @@ export default function App() {
               )}
             </div>
           )}
-        </div>}
+        </div>
+        )}
 
       </main>
 
