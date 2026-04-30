@@ -293,3 +293,91 @@ ipcMain.handle('live:status', async () => {
   }
   return liveMonitor.getStatus();
 });
+
+// ── Disk Space Analyzer ────────────────────────────────────────────────────────
+const { scanDirectory } = require('../os/diskscanner');
+
+let currentDiskScan = null;
+
+// Recursively serialize a tree node, stripping circular _parent references
+function serializeDiskTree(node) {
+  if (!node) return null;
+  return {
+    name:        node.name,
+    path:        node.path,
+    size:        node.size,
+    allocated:   node.allocated,
+    files:       node.files,
+    folders:     node.folders,
+    modified:    node.modified,
+    accessDenied: node.accessDenied || false,
+    scanning:    node._scanning    || false,
+    children:    (node.children || []).map(serializeDiskTree)
+  };
+}
+
+// Open a single-folder picker for the Disk Analyzer
+ipcMain.handle('disk:pickFolder', async () => {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  const result = await dialog.showOpenDialog(win, {
+    title:      'Select folder to analyze',
+    properties: ['openDirectory']
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+
+// Run a disk scan and stream progress snapshots via 'disk:progress' events
+ipcMain.handle('disk:scan', async (_e, folderPath) => {
+  // Abort any in-progress scan
+  if (currentDiskScan) currentDiskScan.aborted = true;
+
+  const state    = { aborted: false, scanned: 0, completed: 0, root: null };
+  currentDiskScan = state;
+
+  const startTime = Date.now();
+  let lastCount   = 0;
+  let lastTime    = startTime;
+
+  // Send a live snapshot every 500 ms so the UI updates in real time
+  const progressTimer = setInterval(() => {
+    if (!state.root || !mainWindow) return;
+    const now   = Date.now();
+    const dt    = (now - lastTime) / 1000;
+    const speed = dt > 0 ? Math.round((state.scanned - lastCount) / dt) : 0;
+    lastCount   = state.scanned;
+    lastTime    = now;
+    mainWindow.webContents.send('disk:progress', {
+      tree:    serializeDiskTree(state.root),
+      scanned: state.scanned,
+      speed,
+      elapsed: ((now - startTime) / 1000).toFixed(1)
+    });
+  }, 500);
+
+  try {
+    await scanDirectory(folderPath, null, state);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    if (state.aborted) return { ok: false, error: 'aborted' };
+    return {
+      ok:           true,
+      tree:         serializeDiskTree(state.root),
+      totalScanned: state.scanned,
+      elapsed
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    clearInterval(progressTimer);
+    if (currentDiskScan === state) currentDiskScan = null;
+  }
+});
+
+// Abort the current disk scan
+ipcMain.handle('disk:abort', () => {
+  if (currentDiskScan) {
+    currentDiskScan.aborted = true;
+    currentDiskScan = null;
+  }
+  return { ok: true };
+});

@@ -7,6 +7,7 @@ import ExportButton from './components/ExportButton.jsx';
 import ScanProgress from './components/ScanProgress.jsx';
 import LiveAlerts from './components/LiveAlerts.jsx';
 import Tooltip from './components/Tooltip.jsx';
+import DiskSpaceAnalyzer from './components/DiskSpaceAnalyzer.jsx';
 
 // Dashboard Icons (SVG components)
 const Icons = {
@@ -391,9 +392,10 @@ export default function App() {
     { id: 'dashboard', label: 'Dashboard', icon: Icons.Dashboard },
     { id: 'performance', label: 'Performance', icon: Icons.Performance },
     { id: 'storage', label: 'Storage', icon: Icons.Storage },
+    { id: 'disk', label: 'Disk Analyzer', icon: Icons.Drive },
     { id: 'processes', label: 'Processes', icon: Icons.Processes },
     { id: 'network', label: 'Network', icon: Icons.Network },
-    { id: 'alerts', label: 'Alerts', icon: Icons.Alerts, badge: 3 },
+    { id: 'alerts', label: 'Alerts', icon: Icons.Alerts, badge: report ? (report.criticalCount + report.warningCount) : 0 },
     { id: 'reports', label: 'Reports', icon: Icons.Reports },
     { id: 'settings', label: 'Settings', icon: Icons.Settings },
     { id: 'about', label: 'About', icon: Icons.About }
@@ -469,31 +471,43 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="main-container">
+      <main className={`main-container${activeTab === 'disk' ? ' main-container--disk' : ''}`}>
         {/* Header */}
         <header className="main-header">
           <div className="header-title">
-            <Icons.Shield />
+            {activeTab === 'disk' ? <Icons.Drive /> : <Icons.Shield />}
             <div className="title-group">
-              <h2>System Health Overview</h2>
-              <p>Real-time monitoring and intelligent alerts for a healthy system</p>
+              {activeTab === 'disk'
+                ? <><h2>Disk Space Analyzer</h2><p>Explore and manage disk usage — visualise every file and folder like TreeSize</p></>
+                : <><h2>System Health Overview</h2><p>Real-time monitoring and intelligent alerts for a healthy system</p></>}
             </div>
           </div>
           <div className="header-actions">
-            <span className="last-scanned">
-              {report ? `Last scanned: ${new Date(report.timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, ${new Date(report.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not scanned yet'}
-            </span>
+            {activeTab !== 'disk' && (
+              <span className="last-scanned">
+                {report ? `Last scanned: ${new Date(report.timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, ${new Date(report.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not scanned yet'}
+              </span>
+            )}
             <button className="icon-btn" onClick={toggleTheme}>
               {darkMode ? '☀️' : '🌙'}
             </button>
-            <button className="btn-scan-now" onClick={runScan} disabled={loading}>
-              {loading ? <span className="spinner" /> : 'Scan Now'}
-            </button>
+            {activeTab !== 'disk' && (
+              <button className="btn-scan-now" onClick={runScan} disabled={loading}>
+                {loading ? <span className="spinner" /> : 'Scan Now'}
+              </button>
+            )}
           </div>
         </header>
 
+        {/* Disk Analyzer View */}
+        {activeTab === 'disk' && (
+          <div className="disk-panel-wrap">
+            <DiskSpaceAnalyzer />
+          </div>
+        )}
+
         {/* Dashboard Content */}
-        <div className="dashboard-content">
+        {activeTab !== 'disk' && <div className="dashboard-content">
           {loading && scanProgress.current && (
             <div className="scan-progress-bar">
               <div className="scan-progress-info">
@@ -752,7 +766,8 @@ export default function App() {
               )}
             </div>
           )}
-        </div>
+        </div>}
+
       </main>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />

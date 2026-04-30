@@ -28,6 +28,17 @@ contextBridge.exposeInMainWorld('rakshak', {
     ipcRenderer.on('health:autoreport', listener);
     return () => ipcRenderer.removeListener('health:autoreport', listener);
   },
+  // Disk Space Analyzer API
+  pickDiskFolder: () => ipcRenderer.invoke('disk:pickFolder'),
+  scanDisk: (folderPath, onProgress) => {
+    const listener = (_e, snap) => onProgress && onProgress(snap);
+    ipcRenderer.on('disk:progress', listener);
+    return ipcRenderer.invoke('disk:scan', folderPath).finally(() => {
+      ipcRenderer.removeListener('disk:progress', listener);
+    });
+  },
+  abortDiskScan: () => ipcRenderer.invoke('disk:abort'),
+
   // Live Monitor API
   liveMonitor: {
     start: (options) => ipcRenderer.invoke('live:start', options),
