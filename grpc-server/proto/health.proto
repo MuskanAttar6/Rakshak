@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package rakshak;
+
+// Bidirectional streaming RPC between a Rakshak node (client) and the central server.
+service HealthMonitor {
+  rpc HealthStream (stream NodeMessage) returns (stream ServerMessage) {}
+}
+
+// ─── Client → Server ───────────────────────────────────────────────────────
+message NodeMessage {
+  oneof payload {
+    NodeHello    hello     = 1;
+    HealthReport report    = 2;
+    Heartbeat    heartbeat = 3;
+  }
+}
+
+// ─── Server → Client ───────────────────────────────────────────────────────
+message ServerMessage {
+  oneof payload {
+    RequestHealth request_health = 1;
+    ServerAck     ack            = 2;
+    Ping          ping           = 3;
+  }
+}
+
+// ─── Shared message types ──────────────────────────────────────────────────
+message NodeHello {
+  string node_id  = 1;
+  string hostname = 2;
+  string platform = 3;
+  string arch     = 4;
+  string version  = 5;
+}
+
+message CpuData {
+  float usage_percent = 1;
+}
+
+message MemoryData {
+  float used_gb   = 1;
+  float total_gb  = 2;
+  float free_gb   = 3;
+  float percent   = 4;
+}
+
+message StorageData {
+  string drive        = 1;
+  float  used_gb      = 2;
+  float  total_gb     = 3;
+  float  free_gb      = 4;
+  float  free_percent = 5;
+}
+
+message NetworkData {
+  bool  online      = 1;
+  float avg_latency = 2;
+  float avg_loss    = 3;
+}
+
+message HealthReport {
+  string      node_id   = 1;
+  string      timestamp = 2;
+  int32       score     = 3;
+  CpuData     cpu       = 4;
+  MemoryData  memory    = 5;
+  StorageData storage   = 6;
+  NetworkData network   = 7;
+}
+
+message Heartbeat {
+  string node_id = 1;
+  string ts      = 2;
+}
+
+message RequestHealth {
+  string request_id = 1;
+}
+
+message ServerAck {
+  string message    = 1;
+  string request_id = 2;
+}
+
+message Ping {
+  string ts = 1;
+}

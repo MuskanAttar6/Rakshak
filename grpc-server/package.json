@@ -1,0 +1,14 @@
+{
+  "name": "rakshak-server",
+  "version": "1.0.0",
+  "description": "Rakshak Central Health Monitor — gRPC server that collects health reports from multiple Rakshak nodes.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.0",
+    "@grpc/proto-loader": "^0.7.15"
+  }
+}

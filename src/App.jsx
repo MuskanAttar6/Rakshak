@@ -6,6 +6,7 @@ import SearchBar from './components/SearchBar.jsx';
 import ExportButton from './components/ExportButton.jsx';
 import ScanProgress from './components/ScanProgress.jsx';
 import LiveAlerts from './components/LiveAlerts.jsx';
+import Tooltip from './components/Tooltip.jsx';
 
 // Dashboard Icons (SVG components)
 const Icons = {
@@ -175,6 +176,7 @@ export default function App() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [scanProgress, setScanProgress] = useState({ current: '', completed: 0, total: 0 });
+  const [grpcConnected, setGrpcConnected] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [cpuOnlyResult, setCpuOnlyResult] = useState(null);
   const [checkingCpu, setCheckingCpu] = useState(false);
@@ -332,9 +334,17 @@ export default function App() {
   useEffect(() => {
     if (!window.rakshak) return;
     window.rakshak.getPlatform().then(setPlatform);
+    // gRPC connection status
+    if (window.rakshak.getGrpcStatus) {
+      window.rakshak.getGrpcStatus().then(s => setGrpcConnected(s?.connected ?? false));
+    }
+    const offGrpc = window.rakshak.onGrpcStatus?.(s => setGrpcConnected(s?.connected ?? false));
     const off = window.rakshak.onAutoReport((r) => setReport(r));
     runScan();
-    return () => off && off();
+    return () => {
+      off && off();
+      offGrpc && offGrpc();
+    };
   }, [runScan]);
 
   // Get values from report
@@ -406,9 +416,30 @@ export default function App() {
           <div className="logo">
             <Icons.ShieldCheck />
           </div>
-          <div className="brand-info">
-            <h1>Rakshak</h1>
-            <p>The Performance Guard</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {grpcConnected !== null && (
+              <Tooltip text={grpcConnected ? 'Connected to central server' : 'Not connected to central server'}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: grpcConnected ? '#4caf50' : '#64748b', cursor: 'default' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: grpcConnected ? '#4caf50' : '#475569', display: 'inline-block', flexShrink: 0 }} />
+                  {grpcConnected ? 'Server' : 'No Server'}
+                </div>
+              </Tooltip>
+            )}
+            <div className="brand-info">
+              <h1>Rakshak</h1>
+              <p>The Performance Guard</p>
+            </div>
+            <div className="hero-meta">
+              {report ? `Last checked: ${new Date(report.timestamp).toLocaleTimeString()}` : ' '}
+            </div>
+            <Tooltip text={`Switch to ${darkMode ? 'light' : 'dark'} mode`}>
+              <button className="theme-toggle" onClick={toggleTheme}>
+                {darkMode ? '☀️' : '🌙'}
+              </button>
+            </Tooltip>
+            <Tooltip text="Export report">
+              <ExportButton report={report} />
+            </Tooltip>
           </div>
         </div>
 

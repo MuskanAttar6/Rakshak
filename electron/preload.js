@@ -17,6 +17,12 @@ contextBridge.exposeInMainWorld('rakshak', {
   pickFolder: () => ipcRenderer.invoke('app:pickFolder'),
   runDuplicateScan: (paths) => ipcRenderer.invoke('duplicates:scan', paths),
   quit: () => ipcRenderer.invoke('app:quit'),
+  getGrpcStatus: () => ipcRenderer.invoke('grpc:status'),
+  onGrpcStatus:  (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('grpc:status', listener);
+    return () => ipcRenderer.removeListener('grpc:status', listener);
+  },
   onAutoReport: (cb) => {
     const listener = (_e, data) => cb(data);
     ipcRenderer.on('health:autoreport', listener);

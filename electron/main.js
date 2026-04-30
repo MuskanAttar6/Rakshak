@@ -4,12 +4,14 @@ const { app, BrowserWindow, ipcMain, Notification, Tray, Menu, nativeImage, shel
 const path = require('path');
 const { exec } = require('child_process');
 const { runHealthCheck } = require('../core/engine');
+const { RakshakGrpcClient } = require('../grpc/client');
 const { LiveMonitor } = require('../core/live-monitor');
 
 const isDev = process.env.NODE_ENV === 'development';
 
-let mainWindow = null;
-let tray = null;
+let mainWindow  = null;
+let tray        = null;
+let grpcClient  = null;
 let liveMonitor = null;
 
 function createWindow() {
@@ -90,6 +92,12 @@ app.whenReady().then(async () => {
   createTray();
   setupAutoLaunch();
 
+  // gRPC bidirectional client — connect to central health monitor server
+  grpcClient = new RakshakGrpcClient();
+  grpcClient.on('connected',    (data) => mainWindow?.webContents.send('grpc:status', { connected: true,  ...data }));
+  grpcClient.on('disconnected', (data) => mainWindow?.webContents.send('grpc:status', { connected: false, ...data }));
+  grpcClient.connect();
+
   // Run an initial scan shortly after launch
   setTimeout(() => { runScanAndNotify(); }, 2500);
 
@@ -102,7 +110,15 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// IPC: run a full health check on demand (optimized, low CPU)
+app.on('before-quit', () => {
+  if (grpcClient) grpcClient.disconnect();
+});
+
+app.on('before-quit', () => {
+  if (grpcClient) grpcClient.disconnect();
+});
+
+// IPC: run a full health check on demand
 ipcMain.handle('health:run', async () => {
   const totalChecks = 12; // Approximate number of checks
   let completed = 0;
@@ -202,6 +218,9 @@ ipcMain.handle('app:openPath', async (_e, targetPath) => {
 });
 
 ipcMain.handle('app:quit', () => { app.quit(); });
+
+// gRPC client status
+ipcMain.handle('grpc:status', () => grpcClient ? grpcClient.getStatus() : { connected: false, nodeId: null });
 
 // Run a duplicate scan on custom paths passed from the renderer
 ipcMain.handle('duplicates:scan', async (_e, paths) => {
