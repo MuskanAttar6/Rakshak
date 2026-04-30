@@ -9,6 +9,8 @@ import LiveAlerts from './components/LiveAlerts.jsx';
 import Tooltip from './components/Tooltip.jsx';
 import DiskSpaceAnalyzer from './components/DiskSpaceAnalyzer.jsx';
 import AboutPage from './components/AboutPage.jsx';
+import AntivirusPage from './components/AntivirusPage.jsx';
+import UnusedAppsPage from './components/UnusedAppsPage.jsx';
 
 // Dashboard Icons (SVG components)
 const Icons = {
@@ -362,14 +364,17 @@ export default function App() {
   const cpuResult = report?.results?.find(r => r.id === 'cpu');
   const ramResult = report?.results?.find(r => r.id === 'ram');
   const diskResult = report?.results?.find(r => r.id === 'disk');
-  const internetResult = report?.results?.find(r => r.id === 'internet');
+  // 'internet' check = connectivity only; 'network-speed' check = download Mbps
+  const internetResult   = report?.results?.find(r => r.id === 'internet');
+  const netSpeedResult   = report?.results?.find(r => r.id === 'network-speed');
 
-  const cpuValue = cpuResult?.details?.usagePercent || 0;
-  const ramValue = ramResult?.details?.percentUsed || 0;
+  const cpuValue  = cpuResult?.details?.usagePercent ?? null;
+  // RAM: getRAMUsage() returns { percent } (not percentUsed)
+  const ramValue   = ramResult?.details?.percent ?? null;
   // diskResult.details has { totalGB, usedGB, freeGB, freePercent } — compute usedPct
-  const diskValue = diskResult?.details
-    ? +(((diskResult.details.usedGB || 0) / (diskResult.details.totalGB || 1)) * 100).toFixed(1)
-    : (drives[0]?.usedPct || 0);
+  const diskValue  = diskResult?.details?.totalGB
+    ? +(((diskResult.details.usedGB || 0) / diskResult.details.totalGB) * 100).toFixed(1)
+    : (drives[0]?.usedPct ?? null);
 
   // Generate sparkline data (simulated for demo)
   const generateSparkline = (baseValue) => {
@@ -402,16 +407,16 @@ export default function App() {
   ];
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Icons.Dashboard },
-    { id: 'performance', label: 'Performance', icon: Icons.Performance },
-    { id: 'storage', label: 'Storage', icon: Icons.Storage },
-    { id: 'disk', label: 'Disk Analyzer', icon: Icons.Drive },
-    { id: 'processes', label: 'Processes', icon: Icons.Processes },
-    { id: 'network', label: 'Network', icon: Icons.Network },
-    { id: 'alerts', label: 'Alerts', icon: Icons.Alerts, badge: report ? (report.criticalCount + report.warningCount) : 0 },
-    { id: 'reports', label: 'Reports', icon: Icons.Reports },
-    { id: 'settings', label: 'Settings', icon: Icons.Settings },
-    { id: 'about', label: 'About', icon: Icons.About }
+    { id: 'dashboard',  label: 'Dashboard',   icon: Icons.Dashboard },
+    { id: 'performance',label: 'Performance',  icon: Icons.Performance },
+    { id: 'storage',    label: 'Storage',      icon: Icons.Storage },
+    { id: 'disk',       label: 'Disk Analyzer',icon: Icons.Drive },
+    { id: 'processes',  label: 'Processes',    icon: Icons.Processes },
+    { id: 'network',    label: 'Network',      icon: Icons.Network },
+    { id: 'antivirus',   label: 'Antivirus',      icon: Icons.Shield },
+    { id: 'unused-apps', label: 'Unused Apps',    icon: Icons.Processes },
+    { id: 'reports',    label: 'Health Reports', icon: Icons.Reports },
+    { id: 'about',      label: 'About',          icon: Icons.About }
   ];
 
   return (
@@ -475,15 +480,19 @@ export default function App() {
         {/* Header */}
         <header className="main-header">
           <div className="header-title">
-            {activeTab === 'disk' ? <Icons.Drive /> : <Icons.Shield />}
+            {activeTab === 'disk' ? <Icons.Drive /> : activeTab === 'antivirus' ? <Icons.ShieldCheck /> : <Icons.Shield />}
             <div className="title-group">
               {activeTab === 'disk'
                 ? <><h2>Disk Space Analyzer</h2><p>Explore and manage disk usage — visualise every file and folder like TreeSize</p></>
+                : activeTab === 'antivirus'
+                ? <><h2>Antivirus Scan</h2><p>ClamAV-powered malware detection — scan files, folders, or your entire drive</p></>
+                : activeTab === 'unused-apps'
+                ? <><h2>Unused Apps</h2><p>Discover installed apps you haven&apos;t launched in a while and reclaim disk space</p></>
                 : <><h2>System Health Overview</h2><p>Real-time monitoring and intelligent alerts for a healthy system</p></>}
             </div>
           </div>
           <div className="header-actions">
-            {activeTab !== 'disk' && (
+            {activeTab !== 'disk' && activeTab !== 'antivirus' && activeTab !== 'unused-apps' && (
               <span className="last-scanned">
                 {report ? `Last scanned: ${new Date(report.timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, ${new Date(report.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not scanned yet'}
               </span>
@@ -493,10 +502,10 @@ export default function App() {
                 {darkMode ? '☀️' : '🌙'}
               </button>
             </Tooltip>
-            {activeTab !== 'disk' && (
+            {activeTab !== 'disk' && activeTab !== 'antivirus' && activeTab !== 'unused-apps' && (
               <ExportButton report={report} />
             )}
-            {activeTab !== 'disk' && (
+            {activeTab !== 'disk' && activeTab !== 'antivirus' && activeTab !== 'unused-apps' && (
               <button className="btn-scan-now" onClick={runScan} disabled={loading}>
                 {loading ? <span className="spinner" /> : 'Scan Now'}
               </button>
@@ -511,6 +520,20 @@ export default function App() {
           </div>
         )}
 
+        {/* Antivirus View */}
+        {activeTab === 'antivirus' && (
+          <div className="dashboard-content">
+            <AntivirusPage />
+          </div>
+        )}
+
+        {/* Unused Apps View */}
+        {activeTab === 'unused-apps' && (
+          <div className="dashboard-content">
+            <UnusedAppsPage />
+          </div>
+        )}
+
         {/* About View */}
         {activeTab === 'about' && (
           <div className="dashboard-content">
@@ -519,7 +542,7 @@ export default function App() {
         )}
 
         {/* Dashboard Content */}
-        {activeTab !== 'disk' && activeTab !== 'about' && <div className="dashboard-content">
+        {activeTab !== 'disk' && activeTab !== 'about' && activeTab !== 'antivirus' && activeTab !== 'unused-apps' && <div className="dashboard-content">
           {loading && scanProgress.current && (
             <div className="scan-progress-bar">
               <div className="scan-progress-info">
@@ -539,35 +562,35 @@ export default function App() {
           <div className="stats-grid">
             <StatCard
               title="CPU Usage"
-              value={cpuValue || 42}
+              value={cpuValue ?? 0}
               unit="%"
               icon={Icons.CPU}
               color="#3b82f6"
-              sparklineData={generateSparkline(cpuValue || 42)}
+              sparklineData={generateSparkline(cpuValue ?? 0)}
             />
             <StatCard
               title="Memory Usage"
-              value={ramValue || 68}
+              value={ramValue ?? 0}
               unit="%"
               icon={Icons.Memory}
               color="#f59e0b"
-              sparklineData={generateSparkline(ramValue || 68)}
+              sparklineData={generateSparkline(ramValue ?? 0)}
             />
             <StatCard
               title="Storage Usage"
-              value={diskValue || 76}
+              value={diskValue ?? 0}
               unit="%"
               icon={Icons.Drive}
               color="#ef4444"
-              sparklineData={generateSparkline(diskValue || 76)}
+              sparklineData={generateSparkline(diskValue ?? 0)}
             />
             <StatCard
               title="Internet Speed"
-              value={internetResult?.details?.speed || 82.6}
+              value={netSpeedResult?.details?.mbps ?? 0}
               unit=" Mbps"
               icon={Icons.Wifi}
               color="#10b981"
-              trend="↓ 82.6 ↑ 34.7"
+              trend={netSpeedResult?.details?.mbps ? `↓ ${netSpeedResult.details.mbps} Mbps` : ''}
             />
           </div>
 
@@ -647,48 +670,12 @@ export default function App() {
                       <div className="drive-alert">
                         <Icons.Warning />
                         <span>{alertMsg}</span>
-                        <button className="btn-view-details">View Details</button>
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="quick-actions">
-            <div className="action-card optimization">
-              <div className="action-icon">
-                <Icons.Check />
-              </div>
-              <div className="action-info">
-                <h4>Storage Optimization Recommended</h4>
-                <p>We found files that can free up 12.4 GB of space.</p>
-              </div>
-              <button className="btn-optimize">Optimize Now</button>
-            </div>
-          </div>
-
-          {/* CPU Quick Check */}
-          <div className="cpu-quick-section">
-            <button
-              className="btn-cpu-check"
-              onClick={runCpuCheck}
-              disabled={checkingCpu}
-            >
-              {checkingCpu ? (
-                <><span className="spinner" /> Checking CPU...</>
-              ) : (
-                <><Icons.CPU /> Quick CPU Check</>
-              )}
-            </button>
-            {cpuOnlyResult && (
-              <div className={`cpu-result-inline cpu-${cpuOnlyResult.status}`}>
-                <strong>{cpuOnlyResult.details?.usagePercent}%</strong>
-                <span>{cpuOnlyResult.details?.method} • {cpuOnlyResult.details?.counterName}</span>
-              </div>
-            )}
           </div>
 
           {/* Alerts & Live Monitor */}

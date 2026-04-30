@@ -392,3 +392,80 @@ ipcMain.handle('disk:abort', () => {
   }
   return { ok: true };
 });
+
+// ── Antivirus (ClamAV) ────────────────────────────────────────────────────────
+const { runAntivirusScan, findClamScan, getClamAVVersion } = require('../checks/antivirus');
+
+let currentAvScan = {};
+
+// Check if ClamAV is installed on this machine
+ipcMain.handle('antivirus:checkInstalled', async () => {
+  const clamPath = findClamScan();
+  const version  = clamPath ? await getClamAVVersion() : null;
+  return { installed: !!clamPath, path: clamPath, version };
+});
+
+// Open a file/folder picker for the antivirus scan target
+ipcMain.handle('antivirus:pickPath', async () => {
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  const result = await dialog.showOpenDialog(win, {
+    title:      'Select file or folder to scan for malware',
+    properties: ['openDirectory', 'openFile'],
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+
+// Run the antivirus scan, streaming per-file progress to the renderer
+ipcMain.handle('antivirus:scan', async (_e, targetPath) => {
+  // Abort any in-progress AV scan first
+  if (typeof currentAvScan.kill === 'function') currentAvScan.kill();
+  currentAvScan = {};
+
+  try {
+    const result = await runAntivirusScan(
+      targetPath,
+      (progress) => {
+        if (mainWindow) mainWindow.webContents.send('antivirus:progress', progress);
+      },
+      currentAvScan
+    );
+    return { ok: true, ...result };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  } finally {
+    currentAvScan = {};
+  }
+});
+
+// Abort the running antivirus scan
+ipcMain.handle('antivirus:abort', () => {
+  if (typeof currentAvScan.kill === 'function') {
+    currentAvScan.kill();
+    currentAvScan = {};
+  }
+  return { ok: true };
+});
+
+// ── Unused Apps ───────────────────────────────────────────────────────────────
+const { scanUnusedApps } = require('../checks/unused-apps');
+
+// Scan for installed apps that haven't been launched within `thresholdDays`
+ipcMain.handle('unusedApps:scan', async (_e, thresholdDays = 60) => {
+  try {
+    const result = await scanUnusedApps(Number(thresholdDays) || 60);
+    return { ok: true, ...result };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// Open Windows "Programs and Features" (Add/Remove Programs) panel
+ipcMain.handle('unusedApps:openUninstall', () => {
+  try {
+    exec('control appwiz.cpl');
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});

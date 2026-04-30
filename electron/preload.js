@@ -55,5 +55,24 @@ contextBridge.exposeInMainWorld('rakshak', {
       ipcRenderer.on('live:network-status', listener);
       return () => ipcRenderer.removeListener('live:network-status', listener);
     }
-  }
+  },
+
+  // Antivirus (ClamAV) API
+  antivirus: {
+    checkInstalled: () => ipcRenderer.invoke('antivirus:checkInstalled'),
+    pickPath:       () => ipcRenderer.invoke('antivirus:pickPath'),
+    scan:           (targetPath) => ipcRenderer.invoke('antivirus:scan', targetPath),
+    abort:          () => ipcRenderer.invoke('antivirus:abort'),
+    onProgress: (cb) => {
+      const listener = (_e, data) => cb(data);
+      ipcRenderer.on('antivirus:progress', listener);
+      return () => ipcRenderer.removeListener('antivirus:progress', listener);
+    },
+  },
+
+  // Unused Apps API
+  unusedApps: {
+    scan:           (thresholdDays) => ipcRenderer.invoke('unusedApps:scan', thresholdDays),
+    openUninstall:  ()              => ipcRenderer.invoke('unusedApps:openUninstall'),
+  },
 });
