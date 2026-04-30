@@ -60,30 +60,6 @@ const CHECK_META = {
     warnText: 'Connected from an unusual network',
     critText: 'Connected from outside your organisation',
   },
-  updates: {
-    icon: '🔄',
-    label: 'System Updates',
-    group: 'Security',
-    okText: 'System is up to date',
-    warnText: 'Some updates available',
-    critText: 'Many updates pending — update soon',
-  },
-  git: {
-    icon: '🔀',
-    label: 'Git',
-    group: 'Developer Tools',
-    okText: 'Git is set up and ready',
-    warnText: 'Git needs configuration',
-    critText: 'Git is not installed',
-  },
-  docker: {
-    icon: '🐳',
-    label: 'Docker',
-    group: 'Developer Tools',
-    okText: 'Docker is running',
-    warnText: 'Docker is not running',
-    critText: 'Docker is not installed',
-  },
   'win-startup-apps': {
     icon: '🏁',
     label: 'Startup Apps',
@@ -108,14 +84,6 @@ const CHECK_META = {
     warnText: 'Some firewall profiles disabled',
     critText: 'Firewall is turned off',
   },
-  'win-critical-services': {
-    icon: '⚙️',
-    label: 'Essential Services',
-    group: 'Security',
-    okText: 'All essential services running',
-    warnText: 'Some essential services need attention',
-    critText: 'Essential services are stopped',
-  },
   'linux-load-average': {
     icon: '📊',
     label: 'System Load',
@@ -123,14 +91,6 @@ const CHECK_META = {
     okText: 'System load is normal',
     warnText: 'System load is elevated',
     critText: 'System load is very high',
-  },
-  'linux-failed-services': {
-    icon: '⚙️',
-    label: 'System Services',
-    group: 'Security',
-    okText: 'All services running normally',
-    warnText: 'Some services have failed',
-    critText: 'Multiple services have failed',
   },
   'linux-firewall': {
     icon: '🧱',
@@ -192,7 +152,7 @@ export function getScoreLabel(score) {
   return { text: 'Critical', emoji: '🚨' };
 }
 
-const GROUP_ORDER = ['Network', 'Performance', 'Security', 'Storage', 'Developer Tools', 'Other'];
+const GROUP_ORDER = ['Network', 'Performance', 'Security', 'Storage', 'Other'];
 
 export function groupResults(results) {
   const groups = {};
@@ -210,7 +170,6 @@ const GROUP_ICONS = {
   Performance: '⚡',
   Security: '🔒',
   Storage: '💿',
-  'Developer Tools': '🛠️',
   Other: '🔍',
 };
 

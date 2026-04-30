@@ -127,18 +127,11 @@ const FIX_ACTIONS = {
     if (process.platform === 'win32') shell.openExternal('ms-settings:network');
     else exec('xdg-open gnome-control-center wifi');
   },
-  'open-windows-update': () => {
-    if (process.platform === 'win32') shell.openExternal('ms-settings:windowsupdate');
-  },
   'open-windows-security': () => {
     if (process.platform === 'win32') shell.openExternal('windowsdefender:');
   },
   'open-firewall-settings': () => {
     if (process.platform === 'win32') exec('control firewall.cpl');
-  },
-  'open-services': () => {
-    if (process.platform === 'win32') exec('services.msc');
-    else exec('xdg-open "https://wiki.archlinux.org/title/Systemd"');
   }
 };
 
