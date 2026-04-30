@@ -7,6 +7,7 @@ import SearchBar from './components/SearchBar.jsx';
 import ExportButton from './components/ExportButton.jsx';
 import Tooltip from './components/Tooltip.jsx';
 import ScanProgress from './components/ScanProgress.jsx';
+import LiveAlerts from './components/LiveAlerts.jsx';
 
 function useAnimatedNumber(target, duration = 900) {
   const [val, setVal] = useState(0);
@@ -71,25 +72,19 @@ export default function App() {
     setSearchQuery('');
     setScanProgress({ current: 'Initializing...', completed: 0, total: 0 });
 
+    // Subscribe to real progress updates
+    const unsubscribe = window.rakshak.onHealthProgress((progress) => {
+      setScanProgress({
+        current: progress.checkId,
+        completed: progress.completed,
+        total: progress.total
+      });
+    });
+
     try {
-      // Simulate progress updates based on check names
-      const checkNames = ['cpu', 'ram', 'disk', 'internet', 'updates'];
-      let completed = 0;
-
-      const progressInterval = setInterval(() => {
-        if (completed < checkNames.length) {
-          setScanProgress({
-            current: checkNames[completed],
-            completed,
-            total: checkNames.length
-          });
-          completed++;
-        }
-      }, 800);
-
       const r = await window.rakshak.runHealthCheck();
 
-      clearInterval(progressInterval);
+      unsubscribe();
       setScanProgress({ current: '', completed: 0, total: 0 });
 
       setReport(r);
@@ -100,10 +95,30 @@ export default function App() {
         showToast(`${r.criticalCount} critical issue${r.criticalCount > 1 ? 's' : ''} found.`, 'error');
       }
     } catch (err) {
+      unsubscribe();
       showToast('Scan failed. Check logs for details.', 'error');
     } finally {
       setLoading(false);
       setScanProgress({ current: '', completed: 0, total: 0 });
+    }
+  }, [showToast]);
+
+  // Quick CPU-only check
+  const [cpuOnlyResult, setCpuOnlyResult] = useState(null);
+  const [checkingCpu, setCheckingCpu] = useState(false);
+
+  const runCpuCheck = useCallback(async () => {
+    if (!window.rakshak) return;
+    setCheckingCpu(true);
+    
+    try {
+      const { result } = await window.rakshak.runCpuCheck();
+      setCpuOnlyResult(result);
+      showToast(`CPU: ${result.message}`, result.status === 'ok' ? 'success' : 'warning');
+    } catch (err) {
+      showToast('CPU check failed.', 'error');
+    } finally {
+      setCheckingCpu(false);
     }
   }, [showToast]);
 
@@ -196,12 +211,34 @@ export default function App() {
           />
         )}
 
-        <button className="btn btn-primary-lg" onClick={runScan} disabled={loading}>
-          {loading ? <><span className="spinner" /> Checking your computer…</> : 'Check My System'}
-        </button>
+        <div className="scan-buttons">
+          <button className="btn btn-primary-lg" onClick={runScan} disabled={loading}>
+            {loading ? <><span className="spinner" /> Checking your computer…</> : 'Check My System'}
+          </button>
+          <button 
+            className="btn btn-secondary" 
+            onClick={runCpuCheck} 
+            disabled={checkingCpu || loading}
+            title="Quick CPU check only (low CPU impact)"
+          >
+            {checkingCpu ? <><span className="spinner" /> Checking…</> : '⚡ Check CPU Only'}
+          </button>
+        </div>
+
+        {cpuOnlyResult && (
+          <div className={`cpu-result cpu-${cpuOnlyResult.status}`}>
+            <strong>CPU Result:</strong> {cpuOnlyResult.message}
+            {cpuOnlyResult.details && (
+              <div className="cpu-method">
+                Method: {cpuOnlyResult.details.method} • {cpuOnlyResult.details.counterName}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <main className="main-content">
+        <LiveAlerts />
         {report && (
           <SearchBar
             value={searchQuery}

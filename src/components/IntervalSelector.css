@@ -1,0 +1,64 @@
+.interval-selector {
+  background: var(--bg-elevated, #21262d);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.interval-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #8b949e);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.interval-dropdown {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text-primary, #f0f6fc);
+  background: var(--bg-card, #1a1d24);
+  border: 1px solid var(--border-color, #30363d);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.interval-dropdown:hover:not(:disabled) {
+  border-color: var(--accent-color, #58a6ff);
+}
+
+.interval-dropdown:focus {
+  outline: none;
+  border-color: var(--accent-color, #58a6ff);
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+}
+
+.interval-dropdown:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.interval-description {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary, #8b949e);
+}
+
+.interval-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-tertiary, #6e7681);
+  padding: 8px 10px;
+  background: rgba(88, 166, 255, 0.08);
+  border-radius: 4px;
+  border-left: 2px solid var(--accent-color, #58a6ff);
+}

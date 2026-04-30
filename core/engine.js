@@ -84,9 +84,64 @@ function calculateScore(results) {
   return Math.round((earned / results.length) * 100);
 }
 
-async function runHealthCheck() {
+/**
+ * Run a single check by ID (for targeted checks like CPU-only)
+ */
+async function runSingleCheck(checkId) {
   const checks = loadChecks().filter(applicableToPlatform);
-  const results = await Promise.all(checks.map(runSingle));
+  const check = checks.find(c => c.id === checkId);
+  
+  if (!check) {
+    throw new Error(`Check '${checkId}' not found`);
+  }
+  
+  return await runSingle(check);
+}
+
+/**
+ * Optimized health check with throttling to reduce CPU spikes
+ * - Runs checks sequentially (not parallel) to avoid CPU overload
+ * - Adds small delay between checks
+ * - Progress callback for UI updates
+ */
+async function runHealthCheck(options = {}) {
+  const { 
+    onProgress,      // callback(checkId, completed, total)
+    sequential = true,  // run one at a time (default true for lower CPU)
+    delayMs = 100    // ms between checks (default 100ms)
+  } = options;
+  
+  const checks = loadChecks().filter(applicableToPlatform);
+  const results = [];
+  const total = checks.length;
+  
+  if (sequential) {
+    // Sequential execution - lower CPU impact
+    for (let i = 0; i < checks.length; i++) {
+      const check = checks[i];
+      
+      // Report progress before check
+      if (onProgress) {
+        onProgress(check.id, i, total);
+      }
+      
+      // Run the check
+      const result = await runSingle(check);
+      results.push(result);
+      
+      // Small delay to let CPU cool down (except after last check)
+      if (i < checks.length - 1 && delayMs > 0) {
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
+  } else {
+    // Parallel execution - faster but higher CPU (original behavior)
+    const promises = checks.map((check, i) => {
+      if (onProgress) onProgress(check.id, i, total);
+      return runSingle(check);
+    });
+    results.push(...await Promise.all(promises));
+  }
 
   // Stable order: critical → warning → ok, then by name
   const order = { critical: 0, warning: 1, ok: 2 };
@@ -110,4 +165,4 @@ async function runHealthCheck() {
   };
 }
 
-module.exports = { runHealthCheck, calculateScore };
+module.exports = { runHealthCheck, runSingleCheck, calculateScore };

@@ -54,6 +54,26 @@ export default function IssueItem({ issue }) {
           {issue.id === 'duplicates' && (
             <DuplicatesPanel details={issue.details} />
           )}
+          {issue.id === 'cpu' && issue.details && (
+            <div className="tile-detail-row">
+              <div className="tile-detail-label">Measurement</div>
+              <div className="tile-detail-text">
+                <div>Method: <strong>{issue.details.method}</strong></div>
+                <div>Counter: {issue.details.counterName}</div>
+                <div>Response time: {issue.details.responseTimeMs}ms</div>
+                {issue.details.method === 'PDH' && (
+                  <div style={{ marginTop: '4px', color: '#3fb950' }}>
+                    ✓ Task Manager-accurate reading
+                  </div>
+                )}
+                {issue.details.method === 'NodeJS' && (
+                  <div style={{ marginTop: '4px', color: '#d29922' }}>
+                    ⚠ Fallback method (less accurate)
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -4,11 +4,13 @@ const { app, BrowserWindow, ipcMain, Notification, Tray, Menu, nativeImage, shel
 const path = require('path');
 const { exec } = require('child_process');
 const { runHealthCheck } = require('../core/engine');
+const { LiveMonitor } = require('../core/live-monitor');
 
 const isDev = process.env.NODE_ENV === 'development';
 
 let mainWindow = null;
 let tray = null;
+let liveMonitor = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -100,9 +102,37 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// IPC: run a full health check on demand
+// IPC: run a full health check on demand (optimized, low CPU)
 ipcMain.handle('health:run', async () => {
-  return await runHealthCheck();
+  const totalChecks = 12; // Approximate number of checks
+  let completed = 0;
+  
+  return await runHealthCheck({
+    sequential: true,      // Run one at a time (lower CPU)
+    delayMs: 100,          // 100ms delay between checks
+    onProgress: (checkId, done, total) => {
+      completed = done;
+      // Send progress to renderer
+      if (mainWindow) {
+        mainWindow.webContents.send('health:progress', {
+          checkId,
+          completed: done + 1,
+          total,
+          percent: Math.round(((done + 1) / total) * 100)
+        });
+      }
+    }
+  });
+});
+
+// IPC: run CPU-only check (quick, isolated)
+ipcMain.handle('health:runCpu', async () => {
+  const { runSingleCheck } = require('../core/engine');
+  const cpuCheck = await runSingleCheck('cpu');
+  return {
+    ok: true,
+    result: cpuCheck
+  };
 });
 
 // IPC: platform info
@@ -184,4 +214,63 @@ ipcMain.handle('duplicates:scan', async (_e, paths) => {
   } finally {
     delete process.env.RAKSHAK_DUPLICATE_PATHS;
   }
+});
+
+// Live Monitor IPC handlers
+ipcMain.handle('live:start', async (_e, options = {}) => {
+  // Accept configuration from renderer (or use defaults)
+  const config = {
+    networkCheckInterval: options.networkCheckInterval || 2000,
+    networkFastInterval: 500,  // Always fast when issues detected
+    alertCooldown: 30000,
+    usbMonitoring: true,
+    networkMonitoring: true
+  };
+  
+  if (!liveMonitor) {
+    liveMonitor = new LiveMonitor(config);
+    
+    liveMonitor.on('alert', (alert) => {
+      // Show native notification for critical alerts
+      if (alert.type === 'network-lost' || alert.type === 'usb-connected') {
+        if (Notification.isSupported()) {
+          new Notification({
+            title: `Rakshak: ${alert.type === 'network-lost' ? 'Connection Lost' : 'USB Connected'}`,
+            body: alert.message
+          }).show();
+        }
+      }
+      
+      // Send to renderer
+      if (mainWindow) {
+        mainWindow.webContents.send('live:alert', alert);
+      }
+    });
+    
+    liveMonitor.on('network-status', (status) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('live:network-status', status);
+      }
+    });
+  } else {
+    // Update configuration if monitor already exists
+    liveMonitor.config = { ...liveMonitor.config, ...config };
+  }
+  
+  liveMonitor.start();
+  return { ok: true, config };
+});
+
+ipcMain.handle('live:stop', async () => {
+  if (liveMonitor) {
+    liveMonitor.stop();
+  }
+  return { ok: true };
+});
+
+ipcMain.handle('live:status', async () => {
+  if (!liveMonitor) {
+    return { isRunning: false, network: { online: true }, usb: { deviceCount: 0 } };
+  }
+  return liveMonitor.getStatus();
 });

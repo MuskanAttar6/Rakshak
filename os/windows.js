@@ -3,8 +3,103 @@
 const os = require('os');
 const { runPS, run } = require('./shell');
 
-/** Sample CPU usage by measuring idle/total deltas over a short window. */
+/**
+ * Get CPU usage using PDH (Performance Data Helper) via PowerShell
+ * Matches Task Manager accuracy - uses % Processor Utility or % Processor Time
+ * Based on C++ implementation using GetSystemTimes + PDH counters
+ */
 async function getCPUUsage() {
+  try {
+    // Method 1: Try PDH % Processor Utility (most accurate, matches Task Manager)
+    // Falls back to % Processor Time if not available
+    const psScript = `
+      $ErrorActionPreference = 'SilentlyContinue'
+      
+      # Try % Processor Utility first (Windows 10/11, more accurate)
+      $cpu = Get-Counter '\Processor Information(_Total)\% Processor Utility' -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue
+      if ($cpu) {
+        $value = [math]::Round($cpu.CounterSamples.CookedValue, 1)
+        if ($value -ge 0 -and $value -le 100) { Write-Output $value; exit }
+      }
+      
+      # Fallback to % Processor Time (available on all Windows versions)
+      $cpu = Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 1 -MaxSamples 1
+      if ($cpu) {
+        $value = [math]::Round($cpu.CounterSamples.CookedValue, 1)
+        if ($value -ge 0 -and $value -le 100) { Write-Output $value; exit }
+      }
+      
+      # Last resort: use typeperf
+      $typeperf = typeperf '\Processor(_Total)\% Processor Time' -sc 1
+      if ($typeperf) {
+        $lines = $typeperf -split '\r?\n' | Where-Object { $_ -match '^\s*[0-9]' }
+        if ($lines) {
+          $parts = $lines[0] -split ','
+          if ($parts[1]) {
+            $value = [math]::Round([double]($parts[1].Trim('"')), 1)
+            if ($value -ge 0 -and $value -le 100) { Write-Output $value; exit }
+          }
+        }
+      }
+      
+      Write-Output -1
+    `;
+    
+    const { stdout, stderr, code } = await runPS(psScript, { timeout: 3000 });
+    
+    if (code === 0 && stdout) {
+      const value = parseFloat(stdout.trim());
+      if (!isNaN(value) && value >= 0 && value <= 100) {
+        return Math.max(0, Math.min(100, value));
+      }
+    }
+    
+    // If PDH failed, try alternative WMI method
+    return await getCPUUsageWMI();
+  } catch (err) {
+    console.error('[getCPUUsage] PDH method failed:', err.message);
+    // Final fallback to WMI
+    return await getCPUUsageWMI();
+  }
+}
+
+/**
+ * Fallback: Get CPU using WMI (Win32_PerfFormattedData_PerfOS_Processor)
+ * Less accurate but works on all Windows versions
+ */
+async function getCPUUsageWMI() {
+  try {
+    const psScript = `
+      $cpu = Get-WmiObject -Class Win32_PerfFormattedData_PerfOS_Processor | Where-Object { $_.Name -eq '_Total' }
+      if ($cpu) {
+        [math]::Round($cpu.PercentProcessorTime, 1)
+      } else {
+        -1
+      }
+    `;
+    
+    const { stdout, code } = await runPS(psScript, { timeout: 2000 });
+    
+    if (code === 0 && stdout) {
+      const value = parseFloat(stdout.trim());
+      if (!isNaN(value) && value >= 0 && value <= 100) {
+        return value;
+      }
+    }
+    
+    // Ultimate fallback: Node.js os.cpus()
+    return getCPUUsageNodeJS();
+  } catch (err) {
+    console.error('[getCPUUsageWMI] WMI method failed:', err.message);
+    return getCPUUsageNodeJS();
+  }
+}
+
+/**
+ * Ultimate fallback: Node.js native method
+ * Least accurate, matches Linux implementation
+ */
+async function getCPUUsageNodeJS() {
   const sample = () => {
     const cpus = os.cpus();
     let idle = 0, total = 0;
@@ -14,13 +109,107 @@ async function getCPUUsage() {
     }
     return { idle, total };
   };
+  
   const a = sample();
   await new Promise(r => setTimeout(r, 400));
   const b = sample();
+  
   const idleDiff = b.idle - a.idle;
   const totalDiff = b.total - a.total;
   const usage = totalDiff === 0 ? 0 : (1 - idleDiff / totalDiff) * 100;
+  
   return Math.max(0, Math.min(100, +usage.toFixed(1)));
+}
+
+/**
+ * Get detailed CPU info with PDH method tracking
+ * Returns usage + metadata about which counter was used
+ */
+async function getCPUInfoDetailed() {
+  const startTime = Date.now();
+  let method = 'unknown';
+  let counterName = 'N/A';
+  let usage = -1;
+  
+  try {
+    // Try PDH % Processor Utility first (Task Manager accurate)
+    const psScript = `
+      $ErrorActionPreference = 'SilentlyContinue'
+      
+      # Try % Processor Utility first
+      $cpu = Get-Counter '\Processor Information(_Total)\% Processor Utility' -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue
+      if ($cpu) {
+        $value = [math]::Round($cpu.CounterSamples.CookedValue, 1)
+        if ($value -ge 0 -and $value -le 100) { 
+          Write-Output "UTILITY:$value"
+          exit 
+        }
+      }
+      
+      # Fallback to % Processor Time
+      $cpu = Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 1 -MaxSamples 1
+      if ($cpu) {
+        $value = [math]::Round($cpu.CounterSamples.CookedValue, 1)
+        if ($value -ge 0 -and $value -le 100) { 
+          Write-Output "TIME:$value"
+          exit 
+        }
+      }
+      
+      Write-Output "FAILED:-1"
+    `;
+    
+    const { stdout, code } = await runPS(psScript, { timeout: 3000 });
+    
+    if (code === 0 && stdout) {
+      const output = stdout.trim();
+      if (output.startsWith('UTILITY:')) {
+        usage = parseFloat(output.split(':')[1]);
+        method = 'PDH';
+        counterName = '% Processor Utility';
+      } else if (output.startsWith('TIME:')) {
+        usage = parseFloat(output.split(':')[1]);
+        method = 'PDH';
+        counterName = '% Processor Time';
+      }
+    }
+    
+    // If PDH failed, try WMI
+    if (usage === -1) {
+      const wmiScript = `
+        $cpu = Get-WmiObject -Class Win32_PerfFormattedData_PerfOS_Processor | Where-Object { $_.Name -eq '_Total' }
+        if ($cpu) {
+          [math]::Round($cpu.PercentProcessorTime, 1)
+        } else { -1 }
+      `;
+      const { stdout: wmiOut } = await runPS(wmiScript, { timeout: 2000 });
+      if (wmiOut) {
+        usage = parseFloat(wmiOut.trim());
+        method = 'WMI';
+        counterName = 'Win32_PerfFormattedData_PerfOS_Processor';
+      }
+    }
+    
+    // Ultimate fallback
+    if (usage === -1 || isNaN(usage)) {
+      usage = await getCPUUsageNodeJS();
+      method = 'NodeJS';
+      counterName = 'os.cpus() calculation';
+    }
+    
+  } catch (err) {
+    usage = await getCPUUsageNodeJS();
+    method = 'NodeJS';
+    counterName = 'os.cpus() calculation (error fallback)';
+  }
+  
+  return {
+    usagePercent: Math.max(0, Math.min(100, usage)),
+    method,
+    counterName,
+    responseTimeMs: Date.now() - startTime,
+    timestamp: new Date().toISOString()
+  };
 }
 
 async function getRAMUsage() {
@@ -149,6 +338,7 @@ async function checkDocker() {
 
 module.exports = {
   getCPUUsage,
+  getCPUInfoDetailed,
   getRAMUsage,
   getDiskSpace,
   checkInternet,
