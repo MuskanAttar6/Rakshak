@@ -4,7 +4,7 @@ import Toast from './Toast.jsx';
 export function useToast() {
   const [toasts, setToasts] = useState([]);
 
-  const showToast = useCallback((message, type = 'info', duration = 3500) => {
+  const showToast = useCallback((message, type = 'info', duration = 5000) => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type, duration }]);
     return id;

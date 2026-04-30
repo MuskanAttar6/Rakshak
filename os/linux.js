@@ -53,6 +53,57 @@ async function getDiskSpace() {
   };
 }
 
+async function getAllDrives() {
+  // Get all real (physical/logical) mounted filesystems, skip pseudo fs
+  const { stdout } = await run("df -BG --output=source,size,used,avail,target -x tmpfs -x devtmpfs -x squashfs | tail -n +2");
+  const lines = stdout.split('\n').map(l => l.trim()).filter(Boolean);
+  const drives = lines.map(line => {
+    const parts = line.split(/\s+/);
+    if (parts.length < 5) return null;
+    const totalGB  = parseInt(parts[1], 10) || 0;
+    const usedGB   = parseInt(parts[2], 10) || 0;
+    const freeGB   = parseInt(parts[3], 10) || 0;
+    const mount    = parts[4] || '/';
+    const isSystem = mount === '/';
+    const usedPct  = totalGB > 0 ? +((usedGB / totalGB) * 100).toFixed(1) : 0;
+    const warnPct  = isSystem ? 50 : 70;
+    const critPct  = isSystem ? 80 : 90;
+    return {
+      drive:    mount,
+      root:     mount,
+      isSystem,
+      totalGB,
+      usedGB,
+      freeGB,
+      usedPct,
+      freePct:  totalGB > 0 ? +((freeGB / totalGB) * 100).toFixed(1) : 0,
+      warnPct,
+      critPct,
+      status:   usedPct >= critPct ? 'critical' : usedPct >= warnPct ? 'warning' : 'ok'
+    };
+  }).filter(Boolean);
+
+  if (drives.length === 0) {
+    // fallback
+    const single = await getDiskSpace();
+    const usedPct = single.totalGB > 0 ? +((single.usedGB / single.totalGB) * 100).toFixed(1) : 0;
+    return [{
+      drive:    single.drive,
+      root:     single.drive,
+      isSystem: true,
+      totalGB:  single.totalGB,
+      usedGB:   single.usedGB,
+      freeGB:   single.freeGB,
+      usedPct,
+      freePct:  single.freePercent,
+      warnPct:  50,
+      critPct:  80,
+      status:   usedPct >= 80 ? 'critical' : usedPct >= 50 ? 'warning' : 'ok'
+    }];
+  }
+  return drives;
+}
+
 async function checkInternet() {
   const { code, stdout } = await run('ping -c 2 -W 2 8.8.8.8');
   return { online: code === 0, raw: stdout.split('\n').slice(-3).join(' ').trim() };
@@ -142,6 +193,7 @@ module.exports = {
   getCPUUsage,
   getRAMUsage,
   getDiskSpace,
+  getAllDrives,
   checkInternet,
   getRunningServices,
   getLoadAverage,

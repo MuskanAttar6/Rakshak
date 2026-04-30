@@ -1,16 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
-export default function Toast({ type = 'info', message = '', duration = 3500, onClose }) {
+export default function Toast({ type = 'info', message = '', duration = 5000, onClose }) {
   const [isClosing, setIsClosing] = useState(false);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsClosing(true);
-      setTimeout(() => onClose?.(), 300);
+      setTimeout(() => onCloseRef.current?.(), 300);
     }, duration);
 
     return () => clearTimeout(timer);
-  }, [duration, onClose]);
+  }, [duration]); // ← onClose intentionally excluded; using ref to avoid timer resets
 
   const icons = {
     success: '✓',

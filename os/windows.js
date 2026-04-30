@@ -246,6 +246,58 @@ async function getDiskSpace() {
   }
 }
 
+async function getAllDrives() {
+  const ps = `Get-PSDrive -PSProvider FileSystem | Select-Object Name,@{N='UsedGB';E={[math]::Round($_.Used/1GB,2)}},@{N='FreeGB';E={[math]::Round($_.Free/1GB,2)}},@{N='Root';E={$_.Root}} | ConvertTo-Json -Compress`;
+  const { stdout } = await runPS(ps);
+  try {
+    const raw = JSON.parse(stdout);
+    const list = Array.isArray(raw) ? raw : [raw];
+    return list
+      .filter(d => d.UsedGB != null && d.FreeGB != null)
+      .map(d => {
+        const used  = d.UsedGB || 0;
+        const free  = d.FreeGB || 0;
+        const total = used + free;
+        const usedPct = total > 0 ? +((used / total) * 100).toFixed(1) : 0;
+        // Adaptive thresholds: system drive is stricter
+        const isSystem = /^C$/i.test(d.Name);
+        const warnPct  = isSystem ? 50 : 70;
+        const critPct  = isSystem ? 80 : 90;
+        const status = usedPct >= critPct ? 'critical' : usedPct >= warnPct ? 'warning' : 'ok';
+        return {
+          drive:     `${d.Name}:`,
+          root:      d.Root || `${d.Name}:\\`,
+          isSystem,
+          totalGB:   +total.toFixed(2),
+          usedGB:    +used.toFixed(2),
+          freeGB:    +free.toFixed(2),
+          usedPct,
+          freePct:   total > 0 ? +((free / total) * 100).toFixed(1) : 0,
+          warnPct,
+          critPct,
+          status
+        };
+      });
+  } catch {
+    // fallback to single-drive getDiskSpace result
+    const single = await getDiskSpace();
+    const usedPct = +((single.usedGB / (single.totalGB || 1)) * 100).toFixed(1);
+    return [{
+      drive:    single.drive,
+      root:     single.drive + '\\',
+      isSystem: true,
+      totalGB:  single.totalGB,
+      usedGB:   single.usedGB,
+      freeGB:   single.freeGB,
+      usedPct,
+      freePct:  single.freePercent,
+      warnPct:  50,
+      critPct:  80,
+      status:   usedPct >= 80 ? 'critical' : usedPct >= 50 ? 'warning' : 'ok'
+    }];
+  }
+}
+
 async function checkInternet() {
   const { code, stdout } = await run('ping -n 2 8.8.8.8');
   return { online: code === 0, raw: stdout.split('\n').slice(-3).join(' ').trim() };
@@ -341,6 +393,7 @@ module.exports = {
   getCPUInfoDetailed,
   getRAMUsage,
   getDiskSpace,
+  getAllDrives,
   checkInternet,
   getRunningServices,
   getStartupAppCount,

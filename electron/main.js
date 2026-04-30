@@ -294,6 +294,17 @@ ipcMain.handle('live:status', async () => {
   return liveMonitor.getStatus();
 });
 
+// ── All Drives Info ────────────────────────────────────────────────────────────
+const osLayer = require('../os');
+ipcMain.handle('drives:getAll', async () => {
+  try {
+    return await osLayer.getAllDrives();
+  } catch (err) {
+    console.error('[drives:getAll]', err.message);
+    return [];
+  }
+});
+
 // ── Disk Space Analyzer ────────────────────────────────────────────────────────
 const { scanDirectory } = require('../os/diskscanner');
 

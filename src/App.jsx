@@ -8,6 +8,7 @@ import ScanProgress from './components/ScanProgress.jsx';
 import LiveAlerts from './components/LiveAlerts.jsx';
 import Tooltip from './components/Tooltip.jsx';
 import DiskSpaceAnalyzer from './components/DiskSpaceAnalyzer.jsx';
+import AboutPage from './components/AboutPage.jsx';
 
 // Dashboard Icons (SVG components)
 const Icons = {
@@ -171,6 +172,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [platform, setPlatform] = useState(null);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [drives, setDrives] = useState([]);
   const [darkMode, setDarkMode] = useState(() => {
     const stored = localStorage.getItem('rakshak-theme');
     return stored ? stored === 'dark' : true;
@@ -265,7 +267,7 @@ export default function App() {
 
   const toggleTheme = () => {
     setDarkMode(prev => !prev);
-    showToast(darkMode ? 'Light mode activated' : 'Dark mode activated', 'info', 2500);
+    showToast(darkMode ? 'Light mode activated' : 'Dark mode activated', 'info', 5000);
   };
 
   const runScan = useCallback(async () => {
@@ -291,6 +293,10 @@ export default function App() {
 
       setReport(r);
       setAcknowledged(false);
+      // Refresh drive data after each scan
+      if (window.rakshak.getAllDrives) {
+        window.rakshak.getAllDrives().then(d => { if (d?.length) setDrives(d); });
+      }
       if (r.score >= 85) {
         showToast('Great! Your system is healthy.', 'success');
       } else if (r.criticalCount > 0) {
@@ -335,6 +341,10 @@ export default function App() {
   useEffect(() => {
     if (!window.rakshak) return;
     window.rakshak.getPlatform().then(setPlatform);
+    // Load real drive data
+    if (window.rakshak.getAllDrives) {
+      window.rakshak.getAllDrives().then(d => { if (d?.length) setDrives(d); });
+    }
     // gRPC connection status
     if (window.rakshak.getGrpcStatus) {
       window.rakshak.getGrpcStatus().then(s => setGrpcConnected(s?.connected ?? false));
@@ -356,7 +366,10 @@ export default function App() {
 
   const cpuValue = cpuResult?.details?.usagePercent || 0;
   const ramValue = ramResult?.details?.percentUsed || 0;
-  const diskValue = diskResult?.details?.percentUsed || 0;
+  // diskResult.details has { totalGB, usedGB, freeGB, freePercent } — compute usedPct
+  const diskValue = diskResult?.details
+    ? +(((diskResult.details.usedGB || 0) / (diskResult.details.totalGB || 1)) * 100).toFixed(1)
+    : (drives[0]?.usedPct || 0);
 
   // Generate sparkline data (simulated for demo)
   const generateSparkline = (baseValue) => {
@@ -418,31 +431,18 @@ export default function App() {
           <div className="logo">
             <Icons.ShieldCheck />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {grpcConnected !== null && (
-              <Tooltip text={grpcConnected ? 'Connected to central server' : 'Not connected to central server'}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: grpcConnected ? '#4caf50' : '#64748b', cursor: 'default' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: grpcConnected ? '#4caf50' : '#475569', display: 'inline-block', flexShrink: 0 }} />
-                  {grpcConnected ? 'Server' : 'No Server'}
-                </div>
-              </Tooltip>
-            )}
-            <div className="brand-info">
-              <h1>Rakshak</h1>
-              <p>The Performance Guard</p>
-            </div>
-            <div className="hero-meta">
-              {report ? `Last checked: ${new Date(report.timestamp).toLocaleTimeString()}` : ' '}
-            </div>
-            <Tooltip text={`Switch to ${darkMode ? 'light' : 'dark'} mode`}>
-              <button className="theme-toggle" onClick={toggleTheme}>
-                {darkMode ? '☀️' : '🌙'}
-              </button>
-            </Tooltip>
-            <Tooltip text="Export report">
-              <ExportButton report={report} />
-            </Tooltip>
+          <div className="brand-info">
+            <h1>Rakshak</h1>
+            <p>The Performance Guard</p>
           </div>
+          {grpcConnected !== null && (
+            <Tooltip text={grpcConnected ? 'Connected to central server' : 'Not connected to central server'}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: grpcConnected ? '#4caf50' : '#64748b', cursor: 'default', marginLeft: 'auto' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: grpcConnected ? '#4caf50' : '#475569', display: 'inline-block', flexShrink: 0 }} />
+                {grpcConnected ? 'Server' : 'No Server'}
+              </div>
+            </Tooltip>
+          )}
         </div>
 
         <nav className="sidebar-nav">
@@ -488,9 +488,14 @@ export default function App() {
                 {report ? `Last scanned: ${new Date(report.timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, ${new Date(report.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not scanned yet'}
               </span>
             )}
-            <button className="icon-btn" onClick={toggleTheme}>
-              {darkMode ? '☀️' : '🌙'}
-            </button>
+            <Tooltip text={`Switch to ${darkMode ? 'light' : 'dark'} mode`}>
+              <button className="icon-btn" onClick={toggleTheme}>
+                {darkMode ? '☀️' : '🌙'}
+              </button>
+            </Tooltip>
+            {activeTab !== 'disk' && (
+              <ExportButton report={report} />
+            )}
             {activeTab !== 'disk' && (
               <button className="btn-scan-now" onClick={runScan} disabled={loading}>
                 {loading ? <span className="spinner" /> : 'Scan Now'}
@@ -506,8 +511,15 @@ export default function App() {
           </div>
         )}
 
+        {/* About View */}
+        {activeTab === 'about' && (
+          <div className="dashboard-content">
+            <AboutPage />
+          </div>
+        )}
+
         {/* Dashboard Content */}
-        {activeTab !== 'disk' && <div className="dashboard-content">
+        {activeTab !== 'disk' && activeTab !== 'about' && <div className="dashboard-content">
           {loading && scanProgress.current && (
             <div className="scan-progress-bar">
               <div className="scan-progress-info">
@@ -573,107 +585,74 @@ export default function App() {
             </div>
 
             <div className="drives-grid">
-              {/* C Drive */}
-              <div className="drive-card critical">
-                <div className="drive-header">
-                  <div className="drive-info">
-                    <div className="drive-icon windows">
-                      <Icons.Shield />
-                    </div>
-                    <div className="drive-details">
-                      <h4>C Drive</h4>
-                      <span>(System Drive)</span>
-                    </div>
-                  </div>
-                  <span className="drive-status critical">CRITICAL</span>
+              {drives.length === 0 ? (
+                <div className="drive-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2rem', opacity: 0.5 }}>
+                  Loading drive info…
                 </div>
-                <div className="drive-content">
-                  <CircularProgress value={82} size={140} color="#ef4444">
-                    <div className="drive-stats">
-                      <span className="drive-percent">82%</span>
-                      <span className="drive-label">Used</span>
-                    </div>
-                  </CircularProgress>
-                  <div className="drive-metrics">
-                    <div className="metric">
-                      <span className="metric-label">Total Space</span>
-                      <span className="metric-value">237 GB</span>
-                    </div>
-                    <div className="metric">
-                      <span className="metric-label">Used Space</span>
-                      <span className="metric-value" style={{ color: '#ef4444' }}>194 GB</span>
-                    </div>
-                    <div className="metric">
-                      <span className="metric-label">Free Space</span>
-                      <span className="metric-value" style={{ color: '#22c55e' }}>43 GB</span>
-                    </div>
-                    <div className="alert-thresholds">
-                      <div className="threshold">
-                        <span className="dot orange" /> 50% Orange Alert
+              ) : drives.map(drv => {
+                const statusColor = drv.status === 'critical' ? '#ef4444' : drv.status === 'warning' ? '#f59e0b' : '#22c55e';
+                const usedColor   = drv.status === 'critical' ? '#ef4444' : drv.status === 'warning' ? '#f59e0b' : undefined;
+                const alertMsg    = drv.status === 'critical'
+                  ? `Red Alert: ${drv.drive} usage is above ${drv.critPct}%. Consider cleaning up space.`
+                  : drv.status === 'warning'
+                  ? `Orange Alert: ${drv.drive} usage is above ${drv.warnPct}%.`
+                  : null;
+                return (
+                  <div key={drv.drive} className={`drive-card ${drv.status}`}>
+                    <div className="drive-header">
+                      <div className="drive-info">
+                        <div className={`drive-icon ${drv.isSystem ? 'windows' : 'data'}`}>
+                          {drv.isSystem ? <Icons.Shield /> : <Icons.Drive />}
+                        </div>
+                        <div className="drive-details">
+                          <h4>{drv.drive} Drive</h4>
+                          <span>({drv.isSystem ? 'System Drive' : 'Data Drive'})</span>
+                        </div>
                       </div>
-                      <div className="threshold">
-                        <span className="dot red" /> 80% Red Alert
-                      </div>
+                      {drv.status !== 'ok' && (
+                        <span className={`drive-status ${drv.status}`}>{drv.status.toUpperCase()}</span>
+                      )}
                     </div>
-                  </div>
-                </div>
-                <div className="drive-alert">
-                  <Icons.Warning />
-                  <span>Red Alert: C Drive usage is above 80%. Consider cleaning up space.</span>
-                  <button className="btn-view-details">View Details</button>
-                </div>
-              </div>
-
-              {/* D Drive */}
-              <div className="drive-card warning">
-                <div className="drive-header">
-                  <div className="drive-info">
-                    <div className="drive-icon data">
-                      <Icons.Drive />
-                    </div>
-                    <div className="drive-details">
-                      <h4>D Drive</h4>
-                      <span>(Data Drive)</span>
-                    </div>
-                  </div>
-                  <span className="drive-status warning">WARNING</span>
-                </div>
-                <div className="drive-content">
-                  <CircularProgress value={72} size={140} color="#f59e0b">
-                    <div className="drive-stats">
-                      <span className="drive-percent">72%</span>
-                      <span className="drive-label">Used</span>
-                    </div>
-                  </CircularProgress>
-                  <div className="drive-metrics">
-                    <div className="metric">
-                      <span className="metric-label">Total Space</span>
-                      <span className="metric-value">931 GB</span>
-                    </div>
-                    <div className="metric">
-                      <span className="metric-label">Used Space</span>
-                      <span className="metric-value" style={{ color: '#f59e0b' }}>670 GB</span>
-                    </div>
-                    <div className="metric">
-                      <span className="metric-label">Free Space</span>
-                      <span className="metric-value" style={{ color: '#22c55e' }}>261 GB</span>
-                    </div>
-                    <div className="alert-thresholds">
-                      <div className="threshold">
-                        <span className="dot orange" /> 70% Orange Alert
-                      </div>
-                      <div className="threshold">
-                        <span className="dot red" /> 90% Red Alert
+                    <div className="drive-content">
+                      <CircularProgress value={drv.usedPct} size={140} color={statusColor}>
+                        <div className="drive-stats">
+                          <span className="drive-percent">{drv.usedPct}%</span>
+                          <span className="drive-label">Used</span>
+                        </div>
+                      </CircularProgress>
+                      <div className="drive-metrics">
+                        <div className="metric">
+                          <span className="metric-label">Total Space</span>
+                          <span className="metric-value">{drv.totalGB} GB</span>
+                        </div>
+                        <div className="metric">
+                          <span className="metric-label">Used Space</span>
+                          <span className="metric-value" style={usedColor ? { color: usedColor } : {}}>{drv.usedGB} GB</span>
+                        </div>
+                        <div className="metric">
+                          <span className="metric-label">Free Space</span>
+                          <span className="metric-value" style={{ color: '#22c55e' }}>{drv.freeGB} GB</span>
+                        </div>
+                        <div className="alert-thresholds">
+                          <div className="threshold">
+                            <span className="dot orange" /> {drv.warnPct}% Orange Alert
+                          </div>
+                          <div className="threshold">
+                            <span className="dot red" /> {drv.critPct}% Red Alert
+                          </div>
+                        </div>
                       </div>
                     </div>
+                    {alertMsg && (
+                      <div className="drive-alert">
+                        <Icons.Warning />
+                        <span>{alertMsg}</span>
+                        <button className="btn-view-details">View Details</button>
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div className="drive-alert">
-                  <Icons.Warning />
-                  <span>Orange Alert: D Drive usage is above 70%.</span>
-                  <button className="btn-view-details">View Details</button>
-                </div>
-              </div>
+                );
+              })}
             </div>
           </div>
 

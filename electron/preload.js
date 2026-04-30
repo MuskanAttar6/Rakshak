@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('rakshak', {
     return () => ipcRenderer.removeListener('health:autoreport', listener);
   },
   // Disk Space Analyzer API
+  getAllDrives: () => ipcRenderer.invoke('drives:getAll'),
   pickDiskFolder: () => ipcRenderer.invoke('disk:pickFolder'),
   scanDisk: (folderPath, onProgress) => {
     const listener = (_e, snap) => onProgress && onProgress(snap);
