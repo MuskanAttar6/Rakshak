@@ -4,15 +4,17 @@ const { app, BrowserWindow, ipcMain, Notification, Tray, Menu, nativeImage, shel
 const path = require('path');
 const { exec } = require('child_process');
 const { runHealthCheck } = require('../core/engine');
-const { RakshakGrpcClient } = require('../grpc/client');
+const { RakshakGrpcClient }     = require('../grpc/client');
+const { RakshakDashboardClient } = require('../grpc/dashboard-client');
 const { LiveMonitor } = require('../core/live-monitor');
 
 const isDev = process.env.NODE_ENV === 'development';
 
-let mainWindow  = null;
-let tray        = null;
-let grpcClient  = null;
-let liveMonitor = null;
+let mainWindow       = null;
+let tray             = null;
+let grpcClient       = null;
+let dashboardClient  = null;
+let liveMonitor      = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -97,6 +99,9 @@ app.whenReady().then(async () => {
   grpcClient.on('connected',    (data) => mainWindow?.webContents.send('grpc:status', { connected: true,  ...data }));
   grpcClient.on('disconnected', (data) => mainWindow?.webContents.send('grpc:status', { connected: false, ...data }));
   grpcClient.connect();
+
+  // Dashboard client — queries DashboardService on the same server
+  dashboardClient = new RakshakDashboardClient();
 
   // Run an initial scan shortly after launch
   setTimeout(() => { runScanAndNotify(); }, 2500);
@@ -468,4 +473,38 @@ ipcMain.handle('unusedApps:openUninstall', () => {
   } catch (err) {
     return { ok: false, error: err.message };
   }
+});
+
+// ── Remote Nodes (DashboardService) ──────────────────────────────────────────────────────
+ipcMain.handle('nodes:list', async () => {
+  try   { return { ok: true,  nodes: await dashboardClient.listNodes() }; }
+  catch (err) { return { ok: false, nodes: [], error: err.message }; }
+});
+
+ipcMain.handle('nodes:get', async (_e, nodeId) => {
+  try   { return { ok: true,  details: await dashboardClient.getNode(nodeId) }; }
+  catch (err) { return { ok: false, details: null, error: err.message }; }
+});
+
+ipcMain.handle('nodes:watch', (_e, nodeId) => {
+  dashboardClient.watchNode(nodeId, (err, update) => {
+    if (err) return;
+    mainWindow?.webContents.send('nodes:update', update);
+  });
+  return { ok: true };
+});
+
+ipcMain.handle('nodes:unwatch', () => {
+  dashboardClient.unwatchNode();
+  return { ok: true };
+});
+
+ipcMain.handle('nodes:triggerScan', async (_e, nodeId) => {
+  try   { return { ok: true, ...(await dashboardClient.triggerScan(nodeId)) }; }
+  catch (err) { return { ok: false, error: err.message }; }
+});
+
+ipcMain.handle('nodes:alerts', async (_e, nodeId) => {
+  try   { return { ok: true,  alerts: await dashboardClient.listAlerts(nodeId) }; }
+  catch (err) { return { ok: false, alerts: [], error: err.message }; }
 });

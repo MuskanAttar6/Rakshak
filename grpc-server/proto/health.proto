@@ -2,12 +2,21 @@ syntax = "proto3";
 
 package rakshak;
 
-// Bidirectional streaming RPC between a Rakshak node (client) and the central server.
+// ─── Node ↔ Server bidirectional stream ──────────────────────────────────────
 service HealthMonitor {
   rpc HealthStream (stream NodeMessage) returns (stream ServerMessage) {}
 }
 
-// ─── Client → Server ───────────────────────────────────────────────────────
+// ─── Dashboard viewer → Server queries ───────────────────────────────────────
+service DashboardService {
+  rpc ListNodes   (ListNodesRequest)   returns (ListNodesResponse)   {}
+  rpc GetNode     (GetNodeRequest)     returns (NodeDetails)         {}
+  rpc WatchNode   (WatchNodeRequest)   returns (stream NodeUpdate)   {}
+  rpc TriggerScan (TriggerScanRequest) returns (TriggerScanResponse) {}
+  rpc ListAlerts  (ListAlertsRequest)  returns (ListAlertsResponse)  {}
+}
+
+// ─── Client → Server ─────────────────────────────────────────────────────────
 message NodeMessage {
   oneof payload {
     NodeHello    hello     = 1;
@@ -16,7 +25,7 @@ message NodeMessage {
   }
 }
 
-// ─── Server → Client ───────────────────────────────────────────────────────
+// ─── Server → Client ─────────────────────────────────────────────────────────
 message ServerMessage {
   oneof payload {
     RequestHealth request_health = 1;
@@ -25,7 +34,7 @@ message ServerMessage {
   }
 }
 
-// ─── Shared message types ──────────────────────────────────────────────────
+// ─── Core types ──────────────────────────────────────────────────────────────
 message NodeHello {
   string node_id  = 1;
   string hostname = 2;
@@ -59,14 +68,29 @@ message NetworkData {
   float avg_loss    = 3;
 }
 
+// Individual check result — mirrors the local engine output
+message CheckResult {
+  string id           = 1;
+  string name         = 2;
+  string status       = 3;  // "ok" | "warning" | "critical"
+  string message      = 4;
+  string suggestion   = 5;
+  string category     = 6;
+  string details_json = 7;  // JSON-encoded details blob
+}
+
 message HealthReport {
-  string      node_id   = 1;
-  string      timestamp = 2;
-  int32       score     = 3;
-  CpuData     cpu       = 4;
-  MemoryData  memory    = 5;
-  StorageData storage   = 6;
-  NetworkData network   = 7;
+  string               node_id        = 1;
+  string               timestamp      = 2;
+  int32                score          = 3;
+  CpuData              cpu            = 4;
+  MemoryData           memory         = 5;
+  StorageData          storage        = 6;
+  NetworkData          network        = 7;
+  repeated CheckResult results        = 8;   // all individual check results
+  int32                ok_count       = 9;
+  int32                warning_count  = 10;
+  int32                critical_count = 11;
 }
 
 message Heartbeat {
@@ -83,6 +107,84 @@ message ServerAck {
   string request_id = 2;
 }
 
-message Ping {
-  string ts = 1;
+message Ping {}
+
+// ─── DashboardService messages ────────────────────────────────────────────────
+message ListNodesRequest {}
+
+message NodeSummary {
+  string node_id        = 1;
+  string hostname       = 2;
+  string platform       = 3;
+  string arch           = 4;
+  bool   connected      = 5;
+  string last_heartbeat = 6;
+  int32  score          = 7;
+  float  cpu_pct        = 8;
+  float  mem_pct        = 9;
+  float  disk_used_pct  = 10;
+  bool   net_online     = 11;
+  string last_report_ts = 12;
+}
+
+message ListNodesResponse {
+  repeated NodeSummary nodes = 1;
+}
+
+message GetNodeRequest {
+  string node_id = 1;
+}
+
+message HistoryPoint {
+  string ts        = 1;
+  float  cpu       = 2;
+  float  mem       = 3;
+  float  stor_used = 4;
+  float  latency   = 5;
+}
+
+message NodeDetails {
+  string            node_id        = 1;
+  NodeHello         info           = 2;
+  HealthReport      last_report    = 3;
+  string            last_heartbeat = 4;
+  bool              connected      = 5;
+  repeated HistoryPoint history    = 6;
+}
+
+message WatchNodeRequest {
+  string node_id = 1;  // empty string = watch all nodes
+}
+
+message NodeUpdate {
+  NodeDetails details = 1;
+  string      event   = 2;  // "initial" | "report" | "heartbeat" | "connected" | "disconnected"
+}
+
+message TriggerScanRequest {
+  string node_id = 1;
+}
+
+message TriggerScanResponse {
+  bool   ok         = 1;
+  string request_id = 2;
+  string error      = 3;
+}
+
+message ListAlertsRequest {
+  string node_id = 1;  // empty = all nodes
+}
+
+message AlertItem {
+  string id        = 1;
+  string node_id   = 2;
+  string hostname  = 3;
+  string category  = 4;
+  string severity  = 5;
+  string message   = 6;
+  string timestamp = 7;
+}
+
+message ListAlertsResponse {
+  repeated AlertItem alerts = 1;
 }

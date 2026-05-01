@@ -75,4 +75,19 @@ contextBridge.exposeInMainWorld('rakshak', {
     scan:           (thresholdDays) => ipcRenderer.invoke('unusedApps:scan', thresholdDays),
     openUninstall:  ()              => ipcRenderer.invoke('unusedApps:openUninstall'),
   },
+
+  // Remote Nodes API (DashboardService)
+  nodes: {
+    list:         ()         => ipcRenderer.invoke('nodes:list'),
+    get:          (nodeId)   => ipcRenderer.invoke('nodes:get', nodeId),
+    watch:        (nodeId)   => ipcRenderer.invoke('nodes:watch', nodeId),
+    unwatch:      ()         => ipcRenderer.invoke('nodes:unwatch'),
+    triggerScan:  (nodeId)   => ipcRenderer.invoke('nodes:triggerScan', nodeId),
+    alerts:       (nodeId)   => ipcRenderer.invoke('nodes:alerts', nodeId),
+    onUpdate: (cb) => {
+      const listener = (_e, data) => cb(data);
+      ipcRenderer.on('nodes:update', listener);
+      return () => ipcRenderer.removeListener('nodes:update', listener);
+    },
+  },
 });

@@ -1,60 +1,64 @@
-'use strict';
+﻿'use strict';
 
-const osLayer = require('../os');
+const { runHealthCheck } = require('../core/engine');
 
 /**
- * Collects the 3 focused health metrics:
- *   1. CPU   — usage percent
- *   2. Memory + Storage — RAM and primary disk
- *   3. Network — online, latency, packet loss
- *
- * Returns a plain object shaped as a HealthReport proto message.
+ * Collects full health data — runs all checks once via the engine and extracts
+ * the aggregated metric values directly from each check's details object.
+ * This avoids running duplicate OS measurements in parallel (e.g. two concurrent
+ * PowerShell CPU counters that would inflate each other's readings).
  */
 async function collectHealth(nodeId) {
-  const [cpuUsage, ram, disk, network] = await Promise.all([
-    osLayer.getCPUUsage(),
-    osLayer.getRAMUsage(),
-    osLayer.getDiskSpace(),
-    osLayer.getNetworkQuality(),
-  ]);
+  const fullReport = await runHealthCheck({ sequential: false, delayMs: 0 });
 
-  // Score each component (0 = critical, 50 = warning, 100 = ok)
-  const cpuScore  = cpuUsage >= 90 ? 0 : cpuUsage >= 75 ? 50 : 100;
-  const memScore  = ram.percent >= 90 ? 0 : ram.percent >= 80 ? 50 : 100;
-  const diskScore = disk.freePercent < 7 ? 0 : disk.freePercent < 15 ? 50 : 100;
-  const netScore  = !network.online ? 0
-                  : network.avgLoss >= 20 ? 0
-                  : network.avgLoss >= 5  ? 50
-                  : network.avgLatency != null && network.avgLatency > 200 ? 50
-                  : 100;
+  // Extract raw metrics from check details (already collected by the engine)
+  const cpuResult  = fullReport.results.find(r => r.id === 'cpu');
+  const ramResult  = fullReport.results.find(r => r.id === 'ram');
+  const diskResult = fullReport.results.find(r => r.id === 'disk');
+  const netResult  = fullReport.results.find(r => r.id === 'network-quality');
 
-  const score = Math.round((cpuScore + memScore + diskScore + netScore) / 4);
+  const cpuDetails  = cpuResult?.details  || {};
+  const ramDetails  = ramResult?.details  || {};
+  const diskDetails = diskResult?.details || {};
+  const netDetails  = netResult?.details  || {};
 
   return {
     node_id:   nodeId,
     timestamp: new Date().toISOString(),
-    score,
+    score:     fullReport.score,
     cpu: {
-      usage_percent: cpuUsage,
+      usage_percent: cpuDetails.usagePercent ?? 0,
     },
     memory: {
-      used_gb:   ram.usedGB,
-      total_gb:  ram.totalGB,
-      free_gb:   ram.freeGB,
-      percent:   ram.percent,
+      used_gb:  ramDetails.usedGB  ?? 0,
+      total_gb: ramDetails.totalGB ?? 0,
+      free_gb:  ramDetails.freeGB  ?? 0,
+      percent:  ramDetails.percent ?? 0,
     },
     storage: {
-      drive:        disk.drive,
-      used_gb:      disk.usedGB,
-      total_gb:     disk.totalGB,
-      free_gb:      disk.freeGB,
-      free_percent: disk.freePercent,
+      drive:        diskDetails.drive        ?? '',
+      used_gb:      diskDetails.usedGB       ?? 0,
+      total_gb:     diskDetails.totalGB      ?? 0,
+      free_gb:      diskDetails.freeGB       ?? 0,
+      free_percent: diskDetails.freePercent  ?? 0,
     },
     network: {
-      online:      network.online,
-      avg_latency: network.avgLatency || 0,
-      avg_loss:    network.avgLoss    || 0,
+      online:      netDetails.online      ?? false,
+      avg_latency: netDetails.avgLatency  ?? 0,
+      avg_loss:    netDetails.avgLoss     ?? 0,
     },
+    results: fullReport.results.map(r => ({
+      id:           r.id,
+      name:         r.name,
+      status:       r.status,
+      message:      r.message      || '',
+      suggestion:   r.suggestion   || '',
+      category:     r.category     || 'common',
+      details_json: r.details != null ? JSON.stringify(r.details) : '',
+    })),
+    ok_count:       fullReport.okCount,
+    warning_count:  fullReport.warningCount,
+    critical_count: fullReport.criticalCount,
   };
 }
 

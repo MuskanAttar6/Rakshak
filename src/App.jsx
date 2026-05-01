@@ -12,6 +12,8 @@ import AboutPage from './components/AboutPage.jsx';
 import AntivirusPage from './components/AntivirusPage.jsx';
 import UnusedAppsPage from './components/UnusedAppsPage.jsx';
 import ScoreRing from './components/ScoreRing.jsx';
+import RemoteNodesPage from './components/RemoteNodesPage.jsx';
+import './components/RemoteNodesPage.css';
 
 // Dashboard Icons (SVG components)
 const Icons = {
@@ -20,6 +22,7 @@ const Icons = {
   Storage: () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>,
   Processes: () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h4v2H4zm0 5h4v2H4zm0 5h4v2H4zm6-10h10v2H10zm0 5h10v2H10zm0 5h10v2H10z"/></svg>,
   Network: () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>,
+  RemoteNodes: () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-.61.08-1.21.21-1.78L8.99 15v1c0 1.1.9 2 2 2v1.93C7.06 19.43 4 16.07 4 12zm13.89 5.4c-.26-.81-1-1.4-1.9-1.4h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V8h2c1.1 0 2-.9 2-2v-.41A7.984 7.984 0 0 1 20 12c0 2.08-.81 3.98-2.11 5.4z"/></svg>,
   Alerts: () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>,
   Reports: () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>,
   Settings: () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L5.03 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.58 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>,
@@ -414,10 +417,11 @@ export default function App() {
     { id: 'disk',       label: 'Disk Analyzer',icon: Icons.Drive },
     { id: 'processes',  label: 'Processes',    icon: Icons.Processes },
     { id: 'network',    label: 'Network',      icon: Icons.Network },
-    { id: 'antivirus',   label: 'Antivirus',      icon: Icons.Shield },
-    { id: 'unused-apps', label: 'Unused Apps',    icon: Icons.Processes },
-    { id: 'reports',    label: 'Health Reports', icon: Icons.Reports },
-    { id: 'about',      label: 'About',          icon: Icons.About }
+    { id: 'antivirus',    label: 'Antivirus',       icon: Icons.Shield },
+    { id: 'unused-apps',  label: 'Unused Apps',     icon: Icons.Processes },
+    { id: 'remote-nodes', label: 'Remote Nodes',    icon: Icons.RemoteNodes },
+    { id: 'reports',      label: 'Health Reports',  icon: Icons.Reports },
+    { id: 'about',        label: 'About',           icon: Icons.About }
   ];
 
   return (
@@ -549,6 +553,13 @@ export default function App() {
         {activeTab === 'about' && (
           <div className="dashboard-content">
             <AboutPage />
+          </div>
+        )}
+
+        {/* Remote Nodes View */}
+        {activeTab === 'remote-nodes' && (
+          <div className="dashboard-content">
+            <RemoteNodesPage />
           </div>
         )}
 
@@ -754,7 +765,7 @@ export default function App() {
         )}
 
         {/* All other tabs — single scrollable pane */}
-        {activeTab !== 'disk' && activeTab !== 'about' && activeTab !== 'antivirus' && activeTab !== 'unused-apps' && activeTab !== 'reports' && activeTab !== 'network' && activeTab !== 'processes' && activeTab !== 'storage' && activeTab !== 'performance' && (
+        {activeTab !== 'disk' && activeTab !== 'about' && activeTab !== 'antivirus' && activeTab !== 'unused-apps' && activeTab !== 'reports' && activeTab !== 'network' && activeTab !== 'processes' && activeTab !== 'storage' && activeTab !== 'performance' && activeTab !== 'remote-nodes' && (
           <div className="dashboard-content">
           {loading && scanProgress.current && (
             <div className="scan-progress-bar">

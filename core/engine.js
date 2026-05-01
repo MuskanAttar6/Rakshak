@@ -111,33 +111,36 @@ async function runHealthCheck(options = {}) {
     delayMs = 100    // ms between checks (default 100ms)
   } = options;
   
-  const checks = loadChecks().filter(applicableToPlatform);
-  const results = [];
-  const total = checks.length;
+  const allChecks = loadChecks().filter(applicableToPlatform);
+
+  // Run the cpu check FIRST, isolated, before any other processes start.
+  // Other checks spawn external processes (PS, ping, git…) which would inflate
+  // the CPU reading if measured concurrently.
+  const cpuCheck = allChecks.find(c => c.id === 'cpu');
+  const otherChecks = allChecks.filter(c => c.id !== 'cpu');
+  const cpuResult = cpuCheck ? await runSingle(cpuCheck) : null;
+
+  const checks = otherChecks;
+  const results = cpuResult ? [cpuResult] : [];
+  const total = allChecks.length;
+  let doneCount = cpuResult ? 1 : 0;
+
+  if (cpuResult && onProgress) onProgress('cpu', 0, total);
   
   if (sequential) {
-    // Sequential execution - lower CPU impact
     for (let i = 0; i < checks.length; i++) {
       const check = checks[i];
-      
-      // Report progress before check
-      if (onProgress) {
-        onProgress(check.id, i, total);
-      }
-      
-      // Run the check
+      if (onProgress) onProgress(check.id, doneCount, total);
       const result = await runSingle(check);
       results.push(result);
-      
-      // Small delay to let CPU cool down (except after last check)
+      doneCount++;
       if (i < checks.length - 1 && delayMs > 0) {
         await new Promise(r => setTimeout(r, delayMs));
       }
     }
   } else {
-    // Parallel execution - faster but higher CPU (original behavior)
     const promises = checks.map((check, i) => {
-      if (onProgress) onProgress(check.id, i, total);
+      if (onProgress) onProgress(check.id, doneCount + i, total);
       return runSingle(check);
     });
     results.push(...await Promise.all(promises));

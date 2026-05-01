@@ -1,15 +1,15 @@
 'use strict';
 
 /**
- * Rakshak Central Health Monitor � gRPC Server + Web UI
+ * Rakshak Central Health Monitor � gRPC Server + Web UI
  *
- * gRPC :50051   � bidirectional HealthStream from Rakshak nodes
- * HTTP :3001    � Web UI (login -> nodes list -> node dashboard)
+ * gRPC :50051   � bidirectional HealthStream from Rakshak nodes
+ * HTTP :3001    � Web UI (login -> nodes list -> node dashboard)
  *
  * Env vars:
- *   GRPC_PORT         � gRPC port         (default: 50051)
- *   HTTP_PORT         � HTTP port         (default: 3001)
- *   POLL_INTERVAL_MS  � Auto-poll (ms)    (default: 60000)
+ *   GRPC_PORT         � gRPC port         (default: 50051)
+ *   HTTP_PORT         � HTTP port         (default: 3001)
+ *   POLL_INTERVAL_MS  � Auto-poll (ms)    (default: 60000)
  */
 
 const path   = require('path');
@@ -32,7 +32,42 @@ const HTTP_PORT        = parseInt(process.env.HTTP_PORT || '3001', 10);
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '60000', 10);
 const MAX_HISTORY      = 20;
 
-const nodes = new Map();
+const nodes        = new Map();
+const nodeWatchers = new Map(); // nodeId -> Set<call>  ('' = watch-all)
+
+// ─── Helper: build NodeDetails proto object from in-memory node ───────────────
+function buildNodeDetails(id, node) {
+  const r = node.lastReport;
+  return {
+    node_id:        id,
+    info:           node.info || {},
+    last_report:    r || null,
+    last_heartbeat: node.lastHeartbeat || '',
+    connected:      !!node.connected,
+    history: (node.history || []).map(h => ({
+      ts:        h.ts,
+      cpu:       h.cpu       || 0,
+      mem:       h.mem       || 0,
+      stor_used: h.storUsed  || 0,
+      latency:   h.latency   || 0,
+    })),
+  };
+}
+
+// ─── Helper: push an update to all watchers of nodeId (and all-node watchers) ─
+function notifyWatchers(nodeId, event) {
+  const node = nodes.get(nodeId);
+  if (!node) return;
+  const update = { details: buildNodeDetails(nodeId, node), event };
+  for (const key of [nodeId, '']) {
+    const watchers = nodeWatchers.get(key);
+    if (!watchers) continue;
+    for (const call of [...watchers]) {
+      try { call.write(update); }
+      catch { watchers.delete(call); }
+    }
+  }
+}
 
 function loadProto() {
   const pkgDef = protoLoader.loadSync(PROTO_PATH, {
@@ -84,12 +119,14 @@ function healthStream(call) {
       const net  = (r.network && r.network.online) ? 'online' : 'OFFLINE';
       console.log('[server] report  ' + node.info.hostname + ' score=' + r.score + '% cpu=' + cpu + '% mem=' + mem + '% disk=' + disk + '%free net=' + net);
       call.write({ ack: { message: 'Report received.', request_id: '' } });
+      notifyWatchers(nodeId, 'report');
       return;
     }
 
     if (type === 'heartbeat') {
       if (nodeId && nodes.has(nodeId)) {
         nodes.get(nodeId).lastHeartbeat = new Date().toISOString();
+        notifyWatchers(nodeId, 'heartbeat');
       }
     }
   });
@@ -98,7 +135,8 @@ function healthStream(call) {
     if (nodeId && nodes.has(nodeId)) {
       nodes.get(nodeId).connected = false;
       nodes.get(nodeId).call = null;
-      console.log('[server] node disconnected (error): ' + nodeId.slice(0, 8) + '... � ' + err.message);
+      notifyWatchers(nodeId, 'disconnected');
+      console.log('[server] node disconnected (error): ' + nodeId.slice(0, 8) + '... — ' + err.message);
     }
   });
 
@@ -106,6 +144,7 @@ function healthStream(call) {
     if (nodeId && nodes.has(nodeId)) {
       nodes.get(nodeId).connected = false;
       nodes.get(nodeId).call = null;
+      notifyWatchers(nodeId, 'disconnected');
       console.log('[server] node disconnected (end): ' + nodeId.slice(0, 8) + '...');
     }
     try { call.end(); } catch (_) {}
@@ -160,6 +199,98 @@ function parseBody(req) {
 function nodeToJson(id, node) {
   return { node_id: id, info: node.info, lastReport: node.lastReport, lastHeartbeat: node.lastHeartbeat, connected: node.connected, history: node.history };
 }
+
+// ─── DashboardService implementation ─────────────────────────────────────────
+const dashboardService = {
+
+  ListNodes(call, cb) {
+    const list = [];
+    for (const [id, node] of nodes) {
+      const r = node.lastReport;
+      list.push({
+        node_id:        id,
+        hostname:       node.info?.hostname       || '',
+        platform:       node.info?.platform       || '',
+        arch:           node.info?.arch           || '',
+        connected:      !!node.connected,
+        last_heartbeat: node.lastHeartbeat        || '',
+        score:          r?.score                  || 0,
+        cpu_pct:        r?.cpu?.usage_percent     || 0,
+        mem_pct:        r?.memory?.percent        || 0,
+        disk_used_pct:  r?.storage ? +(100 - (r.storage.free_percent || 0)).toFixed(1) : 0,
+        net_online:     r?.network?.online        ?? true,
+        last_report_ts: r?.timestamp              || '',
+      });
+    }
+    cb(null, { nodes: list });
+  },
+
+  GetNode(call, cb) {
+    const id   = call.request.node_id;
+    const node = nodes.get(id);
+    if (!node) { cb({ code: grpc.status.NOT_FOUND, message: 'node not found' }); return; }
+    cb(null, buildNodeDetails(id, node));
+  },
+
+  WatchNode(call) {
+    const nodeId = call.request.node_id || '';  // '' = watch all
+    if (!nodeWatchers.has(nodeId)) nodeWatchers.set(nodeId, new Set());
+    nodeWatchers.get(nodeId).add(call);
+    console.log('[dashboard] WatchNode: ' + (nodeId || '<all>'));
+
+    // Send current state immediately
+    if (nodeId === '') {
+      for (const [id, node] of nodes) {
+        try { call.write({ details: buildNodeDetails(id, node), event: 'initial' }); } catch {}
+      }
+    } else {
+      const node = nodes.get(nodeId);
+      if (node) {
+        try { call.write({ details: buildNodeDetails(nodeId, node), event: 'initial' }); } catch {}
+      }
+    }
+
+    call.on('cancelled', () => {
+      const w = nodeWatchers.get(nodeId);
+      if (w) w.delete(call);
+      console.log('[dashboard] WatchNode cancelled: ' + (nodeId || '<all>'));
+    });
+    call.on('error', () => {
+      const w = nodeWatchers.get(nodeId);
+      if (w) w.delete(call);
+    });
+  },
+
+  TriggerScan(call, cb) {
+    const id   = call.request.node_id;
+    const node = nodes.get(id);
+    if (!node) { cb(null, { ok: false, request_id: '', error: 'node not found' }); return; }
+    if (!node.connected || !node.call) { cb(null, { ok: false, request_id: '', error: 'node is disconnected' }); return; }
+    const reqId = crypto.randomBytes(8).toString('hex');
+    try {
+      node.call.write({ request_health: { request_id: reqId } });
+      console.log('[dashboard] TriggerScan -> ' + id.slice(0, 8) + '... (req: ' + reqId + ')');
+      cb(null, { ok: true, request_id: reqId, error: '' });
+    } catch (err) {
+      cb(null, { ok: false, request_id: '', error: err.message });
+    }
+  },
+
+  ListAlerts(call, cb) {
+    const nodeId = call.request.node_id || '';
+    const raw    = nodeId ? alerts.get(nodeId) : alerts.get();
+    const items  = raw.map(a => ({
+      id:        a.id,
+      node_id:   a.nodeId,
+      hostname:  a.hostname,
+      category:  a.category,
+      severity:  a.severity,
+      message:   a.message,
+      timestamp: a.timestamp,
+    }));
+    cb(null, { alerts: items });
+  },
+};
 
 function startHttpServer() {
   const server = http.createServer(async (req, res) => {
@@ -264,7 +395,8 @@ function startHttpServer() {
 
 const proto      = loadProto();
 const grpcServer = new grpc.Server();
-grpcServer.addService(proto.HealthMonitor.service, { HealthStream: healthStream });
+grpcServer.addService(proto.HealthMonitor.service,   { HealthStream: healthStream });
+grpcServer.addService(proto.DashboardService.service, dashboardService);
 
 grpcServer.bindAsync(
   '0.0.0.0:' + GRPC_PORT,
@@ -274,6 +406,6 @@ grpcServer.bindAsync(
     console.log('[server] gRPC listening  -> port ' + port);
     startPolling();
     startHttpServer();
-    console.log('[server] ready � waiting for Rakshak nodes to connect');
+    console.log('[server] ready � waiting for Rakshak nodes to connect');
   }
 );

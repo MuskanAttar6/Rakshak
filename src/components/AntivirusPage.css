@@ -10,14 +10,97 @@
   animation: fadeUp 0.35s ease both;
 }
 
-.av-page--loading {
+/* ── Future Extension card ─────────────────────────────────────────────────── */
+
+.av-future-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 48px 40px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  gap: 12px;
+}
+
+.av-future-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 260px;
-  gap: 16px;
-  color: var(--text-dim);
-  font-size: 14px;
+  color: #3b82f6;
+  margin-bottom: 8px;
 }
+
+.av-future-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0;
+}
+
+.av-future-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #3b82f6;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.av-future-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  max-width: 480px;
+  margin: 4px 0 8px;
+}
+
+.av-future-features {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  max-width: 480px;
+  margin-top: 4px;
+}
+
+.av-future-feat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--card-bg-inner);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: left;
+}
+
+.av-future-feat span:first-child {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.av-future-badge {
+  margin-top: 8px;
+  padding: 5px 16px;
+  border-radius: 99px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #3b82f6;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
 
 /* ── Hero card ─────────────────────────────────────────────────────────────── */
 
